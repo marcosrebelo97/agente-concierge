@@ -71,12 +71,18 @@ const MUDANCA = palavras([
   'cancelar', 'desisto',
 ]);
 const NEGACAO_INICIAL = /^\s*(não|nao|nope|negativo)([^\p{L}]|$)/iu;
+// Hesitação não é confirmação, mesmo com "sim" ou "pode" no meio ("pode ser que sim, vou ver"). "Pode ser"
+// às vezes é um sim informal; mesmo assim fica de fora: o custo é uma pergunta a mais, o do erro é um lead indevido.
+const HESITACAO = palavras([
+  'acho', 'talvez', 'pode ser', 'provavelmente', 'quem sabe', 'não sei', 'nao sei', 'vou ver', 'vou pensar',
+  'deixa eu ver', 'deixa eu pensar', 'te falo', 'te aviso', 'mais tarde', 'ainda não', 'ainda nao', 'hmm', 'hum',
+]);
 
 /**
- * A mensagem do hóspede confirma o resumo? Precisa afirmar e não pode pedir mudança nem começar
- * negando. Na dúvida, não confirma: o agente pergunta de novo, o que é melhor que um lead errado.
+ * A mensagem do hóspede confirma o resumo? Precisa afirmar e não pode pedir mudança, hesitar nem
+ * começar negando. Na dúvida, não confirma: o agente pergunta de novo, o que é melhor que um lead errado.
  */
 export function confirmaReserva(mensagem: string): boolean {
   const afirma = AFIRMATIVO.test(mensagem) || EMOJI_AFIRMATIVO.test(mensagem);
-  return afirma && !MUDANCA.test(mensagem) && !NEGACAO_INICIAL.test(mensagem);
+  return afirma && !MUDANCA.test(mensagem) && !HESITACAO.test(mensagem) && !NEGACAO_INICIAL.test(mensagem);
 }

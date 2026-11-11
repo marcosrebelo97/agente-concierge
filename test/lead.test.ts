@@ -69,4 +69,20 @@ describe('confirmação do hóspede', () => {
       expect(confirmaReserva(m), m).toBe(false);
     }
   });
+
+  it('não confirma resposta hesitante, mesmo com "sim" ou "pode" no meio', () => {
+    for (const m of [
+      'Hmm, pode ser que sim... vou ver com meu chefe e te falo.',
+      'acho que sim',
+      'pode ser',
+      'talvez, deixa eu ver',
+      'sim, mas ainda não sei a data certa',
+      'provavelmente sim',
+      'ok, te aviso mais tarde',
+    ]) {
+      expect(confirmaReserva(m), m).toBe(false);
+    }
+    // a decisão vem depois da hesitação: aí confirma
+    expect(confirmaReserva('Liberou! Pode registrar.')).toBe(true);
+  });
 });
