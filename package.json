@@ -1,0 +1,18 @@
+{
+  "name": "agente-concierge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agente concierge de hospedagem: tira dúvidas só com o catálogo, cota pela regra de preço, registra o lead depois da confirmação e passa para um humano quando deve.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {},
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12"
+  }
+}
