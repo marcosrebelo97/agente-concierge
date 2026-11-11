@@ -92,8 +92,8 @@ const historicoRecusado = (e: unknown) =>
   typeof e === 'object' && e !== null && 'status' in e && (e as { status: unknown }).status === 400;
 
 const MUDAM_ESTADO = new Set(['preparar_reserva', 'confirmar_reserva']);
-// Depois do resumo, uma consulta nova ou um handoff mudam o assunto: o resumo deixa de estar em discussão.
-const MUDAM_ASSUNTO = new Set(['buscar_imoveis', 'ver_imovel', 'cotar', 'listar_cidades', 'passar_para_humano']);
+// Depois do resumo, uma consulta nova muda o assunto: o resumo deixa de estar em discussão.
+const MUDAM_ASSUNTO = new Set(['buscar_imoveis', 'ver_imovel', 'cotar', 'listar_cidades']);
 
 /**
  * Consultas rodam em paralelo. Se a resposta tem uma ferramenta de reserva, tudo roda em sequência,
@@ -119,12 +119,16 @@ function descartarSeNaoMostrada(estado: Estado, mostrouTextoDoModelo: boolean): 
 
 /**
  * Um resumo de turno anterior continua valendo enquanto a conversa segue nele ("vou ver com meu chefe" e,
- * depois, "liberou, pode registrar"). Se o turno consultou outra coisa ou passou para um humano, o assunto
- * mudou: um "sim" mais adiante pode estar respondendo outra pergunta, então a reserva precisa de novo resumo.
+ * depois, "liberou, pode registrar"). Se o turno consultou outra coisa, o assunto mudou: um "sim" mais
+ * adiante pode estar respondendo outra pergunta, então a reserva precisa de novo resumo. Handoff descarta
+ * sempre, mesmo um resumo deste turno: o que levou ao atendente (valor combinado, exceção) fica com ele.
  */
-function descartarSeMudouDeAssunto(estado: Estado, ferramentas: Set<string>): void {
+function descartarSeMudouDeAssunto(estado: Estado, ferramentas: Set<string>, handoff: boolean): void {
   const p = estado.pendente;
-  if (p && p.turno < estado.turno && [...ferramentas].some((f) => MUDAM_ASSUNTO.has(f))) estado.pendente = null;
+  if (!p) return;
+  if (handoff || (p.turno < estado.turno && [...ferramentas].some((f) => MUDAM_ASSUNTO.has(f)))) {
+    estado.pendente = null;
+  }
 }
 
 const semUso = (): Uso => ({ chamadas: 0, input: 0, cacheEscrita: 0, cacheLeitura: 0, output: 0 });
@@ -284,7 +288,7 @@ export function createAgent(deps: AgentDeps) {
       }
     }
     descartarSeNaoMostrada(estado, mostrouTextoDoModelo);
-    descartarSeMudouDeAssunto(estado, usadas);
+    descartarSeMudouDeAssunto(estado, usadas, handoff);
     return { reply, handoff, uso, ms: Date.now() - inicio };
   }
 

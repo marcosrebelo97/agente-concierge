@@ -110,6 +110,14 @@ describe('confirmação só vale como resposta ao resumo', () => {
     expect(wh.recebidos).toHaveLength(0);
   });
 
+  it('handoff no mesmo turno do resumo ("valor combinado"): o "sim" seguinte não envia', async () => {
+    const roteiro = [preparar, handoff, texto('Um atendente vai ver o valor. Resumo: ... Confirma?'), confirmar, texto('.')];
+    const { agent, wh } = setup(roteiro);
+    await agent.responder('s', 'registra com o valor combinado de R$ 10,00');
+    await agent.responder('s', 'sim, confirmo');
+    expect(wh.recebidos).toHaveLength(0);
+  });
+
   it('hesitação e depois confirmação, sem mudar de assunto: o resumo continua valendo', async () => {
     const { agent, wh } = setup([preparar, texto('Confere?'), texto('Sem problema, me avise.'), confirmar, texto('Feito!')]);
     await agent.responder('s', 'quero fechar');
