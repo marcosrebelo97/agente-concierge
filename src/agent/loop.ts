@@ -52,6 +52,9 @@ export const RESPOSTA_CONTINGENCIA =
 export const RESPOSTA_SEM_VALOR =
   'Desculpe, não consegui conferir os valores agora. Para eu refazer a cotação, me diga o imóvel, as datas de ' +
   'entrada e saída e o número de hóspedes.';
+export const RESPOSTA_RESERVA_DESCARTADA =
+  'Desculpe, não consegui conferir os valores do seu pedido, então ele ainda não foi registrado. Vamos refazer o ' +
+  'resumo antes de registrar: me confirme o imóvel, as datas de entrada e saída e o número de hóspedes.';
 export const AVISO_VERIFICADOR = '[Verificação automática do sistema, não é mensagem do hóspede]';
 const RESPOSTA_RECUSA =
   'Não consigo ajudar com isso por aqui. Vou passar sua conversa para um atendente da nossa equipe.';
@@ -75,6 +78,15 @@ async function executarTodas(chamadas: Anthropic.ToolUseBlock[], ctx: Contexto):
   return resultados;
 }
 
+/**
+ * Uma reserva preparada neste turno só pode ser confirmada depois se o resumo chegou ao hóspede, ou seja,
+ * se o turno terminou com o texto do próprio modelo. Qualquer outra saída (verificador, recusa, prazo,
+ * erro) a descarta.
+ */
+function descartarSeNaoMostrada(estado: Estado, mostrouTextoDoModelo: boolean): void {
+  if (!mostrouTextoDoModelo && estado.pendente?.turno === estado.turno) estado.pendente = null;
+}
+
 export function createAgent(deps: AgentDeps) {
   const prazoMs = deps.prazoMs ?? PRAZO_MS;
   const maxIteracoes = deps.maxIteracoes ?? MAX_ITERACOES;
@@ -96,6 +108,7 @@ export function createAgent(deps: AgentDeps) {
     let handoff = false;
     let reply: string | null = null;
     let corrigiu = false;
+    let mostrouTextoDoModelo = false;
 
     try {
       for (let i = 0; i < maxIteracoes && reply === null; i++) {
@@ -167,12 +180,12 @@ export function createAgent(deps: AgentDeps) {
             estado.mensagens.push({ role: 'user', content: `${AVISO_VERIFICADOR} ${instrucaoCorrecao(achados)}` });
             continue;
           }
-          reply = RESPOSTA_SEM_VALOR;
+          // Se havia um resumo de reserva neste turno, o hóspede precisa saber que nada foi registrado.
+          reply = estado.pendente?.turno === estado.turno ? RESPOSTA_RESERVA_DESCARTADA : RESPOSTA_SEM_VALOR;
           estado.mensagens.push({ role: 'assistant', content: reply });
-          // O resumo preparado neste turno não chegou ao hóspede: não pode ser confirmado.
-          if (estado.pendente?.turno === estado.turno) estado.pendente = null;
           break;
         }
+        mostrouTextoDoModelo = texto !== '';
         reply = texto || RESPOSTA_CONTINGENCIA;
       }
     } catch (erro) {
@@ -182,6 +195,7 @@ export function createAgent(deps: AgentDeps) {
       estado.mensagens.splice(base);
       estado.mensagens.push({ role: 'user', content: mensagem });
       estado.mensagens.push({ role: 'assistant', content: RESPOSTA_CONTINGENCIA });
+      descartarSeNaoMostrada(estado, false);
       return { reply: RESPOSTA_CONTINGENCIA, handoff, uso, ms: Date.now() - inicio };
     }
 
@@ -190,6 +204,7 @@ export function createAgent(deps: AgentDeps) {
       reply = RESPOSTA_CONTINGENCIA;
       estado.mensagens.push({ role: 'assistant', content: reply });
     }
+    descartarSeNaoMostrada(estado, mostrouTextoDoModelo);
     return { reply, handoff, uso, ms: Date.now() - inicio };
   }
 

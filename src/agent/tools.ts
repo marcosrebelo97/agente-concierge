@@ -328,11 +328,9 @@ const confirmarReserva: Ferramenta<Record<string, never>> = {
     const { estado } = ctx;
     const p = estado.pendente;
     if (!p) {
-      // Depois de um envio a pendente é apagada: confirmar de novo nunca duplica o lead.
-      const motivo =
-        estado.leadsEnviados.length > 0
-          ? 'O pedido já foi registrado e não há outro pedido preparado.'
-          : 'Não há reserva preparada. Use preparar_reserva primeiro.';
+      // Depois de um envio a pendente é apagada: confirmar de novo nunca duplica o lead. O motivo não diz
+      // "já registrado": a pendente também some quando o resumo não chegou ao hóspede, e aí nada foi enviado.
+      const motivo = 'Não há reserva preparada. Use preparar_reserva e mostre o resumo ao hóspede primeiro.';
       return { conteudo: { ok: false, motivo }, erro: true };
     }
     if (p.turno >= estado.turno) {

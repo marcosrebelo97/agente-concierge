@@ -26,7 +26,7 @@ const preparar = (dados: Partial<typeof DADOS> = {}): Passo => ({
 const confirmar: Passo = { ferramentas: [{ nome: 'confirmar_reserva', entrada: {} }] };
 const texto = (t: string): Passo => ({ texto: t });
 
-function setup(roteiro: Passo[], resposta?: () => ResultadoEnvio) {
+function setup(roteiro: Passo[], resposta?: () => ResultadoEnvio, opts: { maxIteracoes?: number } = {}) {
   const fake = fakeLlm(roteiro);
   const wh = fakeWebhook(resposta);
   const store = memoryStore<Estado>();
@@ -37,6 +37,7 @@ function setup(roteiro: Passo[], resposta?: () => ResultadoEnvio) {
     store,
     modelo: 'modelo-teste',
     agora: () => new Date('2026-11-11T15:00:00Z'),
+    ...opts,
   });
   return { agent, fake, leads: wh.recebidos, store };
 }
@@ -152,6 +153,21 @@ describe('fluxo do lead', () => {
     const estado = (await store.get('s'))!;
     expect(estado.leadsEnviados).toHaveLength(0);
     expect(estado.pendente).not.toBeNull();
+  });
+
+  // Resumo preparado, mas o turno termina sem o texto do modelo: o hóspede nunca viu o resumo.
+  it.each([
+    { saida: 'erro do modelo', roteiro: [preparar(), { erro: new Error('API fora') }, confirmar, texto('...')], n: 3 },
+    { saida: 'recusa do modelo', roteiro: [preparar(), { recusa: true } as Passo, confirmar, texto('...')], n: 3 },
+    { saida: 'limite de iterações', roteiro: [preparar(), preparar(), confirmar, texto('...')], n: 3, maxIteracoes: 2 },
+  ])('$saida no turno do resumo: a reserva é descartada e o "sim" seguinte não envia', async (c) => {
+    const { agent, fake, leads, store } = setup(c.roteiro, undefined, { maxIteracoes: c.maxIteracoes });
+    await agent.responder('s', 'quero fechar');
+    expect((await store.get('s'))!.pendente).toBeNull();
+    await agent.responder('s', 'sim, confirmo');
+    const [r] = resultados(fake, c.n);
+    expect(r).toMatchObject({ ok: false, motivo: expect.stringMatching(/Não há reserva preparada/) });
+    expect(leads).toHaveLength(0);
   });
 
   it('webhook fora do ar: não diz que registrou e mantém a reserva pendente', async () => {

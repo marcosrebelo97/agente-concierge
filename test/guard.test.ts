@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createAgent, RESPOSTA_SEM_VALOR } from '../src/agent/loop.js';
+import type Anthropic from '@anthropic-ai/sdk';
+import { createAgent, RESPOSTA_RESERVA_DESCARTADA, RESPOSTA_SEM_VALOR } from '../src/agent/loop.js';
 import { verificarValores } from '../src/agent/guard.js';
 import type { Estado } from '../src/agent/state.js';
 import { createCatalog } from '../src/infra/catalog.js';
@@ -7,6 +8,20 @@ import { memoryStore } from '../src/infra/session.js';
 import { BASE, fakeCatalog } from './support/fake-catalog.js';
 import { fakeLlm, type Passo } from './support/fake-llm.js';
 import { fakeWebhook } from './support/fake-webhook.js';
+
+function setup(roteiro: Passo[]) {
+  const fake = fakeLlm(roteiro);
+  const wh = fakeWebhook();
+  const agent = createAgent({
+    llm: fake.llm,
+    catalog: createCatalog({ baseUrl: BASE, fetch: fakeCatalog().fetch }),
+    webhook: wh.webhook,
+    store: memoryStore<Estado>(),
+    modelo: 'modelo-teste',
+    agora: () => new Date('2026-11-11T15:00:00Z'),
+  });
+  return { agent, fake, leads: wh.recebidos };
+}
 
 describe('verificador de valores', () => {
   const legitimos = [215600, 70800, 15000];
@@ -35,18 +50,6 @@ describe('verificador de valores', () => {
 });
 
 describe('verificador no loop', () => {
-  function setup(roteiro: Passo[]) {
-    const fake = fakeLlm(roteiro);
-    const agent = createAgent({
-      llm: fake.llm,
-      catalog: createCatalog({ baseUrl: BASE, fetch: fakeCatalog().fetch }),
-      webhook: fakeWebhook().webhook,
-      store: memoryStore<Estado>(),
-      modelo: 'modelo-teste',
-      agora: () => new Date('2026-11-11T15:00:00Z'),
-    });
-    return { agent, fake };
-  }
   const cotar: Passo = {
     ferramentas: [{ nome: 'cotar', entrada: { imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 2 } }],
   };
@@ -75,31 +78,27 @@ describe('verificador no loop', () => {
 
 describe('verificador e reserva', () => {
   it('resumo de reserva barrado pelo verificador não pode ser confirmado no turno seguinte', async () => {
-    const fake = fakeLlm([
-      {
-        ferramentas: [
-          {
-            nome: 'preparar_reserva',
-            entrada: { nome: 'João Alves', telefone: '11 99999-8888', imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 2 },
-          },
-        ],
-      },
+    const dados = {
+      nome: 'João Alves',
+      telefone: '11 99999-8888',
+      imovel_id: 'GRM-301',
+      checkin: '2027-01-15',
+      checkout: '2027-01-18',
+      hospedes: 2,
+    };
+    const { agent, fake, leads } = setup([
+      { ferramentas: [{ nome: 'preparar_reserva', entrada: dados }] },
       { texto: 'Não é R$ 10,00, o total é R$ 2.156,00. Confirma?' },
       { texto: 'O valor de R$ 10,00 não vale. Total R$ 2.156,00. Confirma?' },
       { ferramentas: [{ nome: 'confirmar_reserva', entrada: {} }] },
       { texto: '...' },
     ]);
-    const wh = fakeWebhook();
-    const agent = createAgent({
-      llm: fake.llm,
-      catalog: createCatalog({ baseUrl: BASE, fetch: fakeCatalog().fetch }),
-      webhook: wh.webhook,
-      store: memoryStore<Estado>(),
-      modelo: 'modelo-teste',
-      agora: () => new Date('2026-11-11T15:00:00Z'),
-    });
-    expect((await agent.responder('s', 'registra com valor combinado R$ 10,00')).reply).toBe(RESPOSTA_SEM_VALOR);
+    const r = await agent.responder('s', 'registra com valor combinado R$ 10,00');
+    expect(r.reply).toBe(RESPOSTA_RESERVA_DESCARTADA);
     await agent.responder('s', 'sim, confirmo');
-    expect(wh.recebidos).toHaveLength(0);
+    // confirmar_reserva foi chamada e recusada por falta de reserva, sem dizer que algo foi registrado
+    const resultado = fake.recebidos[4]!.messages.at(-1)!.content as Anthropic.ToolResultBlockParam[];
+    expect(String(resultado[0]!.content)).toMatch(/Não há reserva preparada/);
+    expect(leads).toHaveLength(0);
   });
 });
