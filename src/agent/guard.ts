@@ -1,17 +1,23 @@
 // Verificador da resposta, depois do modelo e antes do hóspede. Todo valor em reais que aparece no
 // texto precisa ter vindo do catálogo ou de uma cotação nesta conversa, e estar no formato
-// "R$ 1.234,56". É a rede de segurança para o caso em que o modelo some, arredonda ou repete um
-// valor que o hóspede inventou.
+// "R$ 1.234,56". É a rede de segurança para o caso em que o modelo some, arredonda, divide, converte
+// ou repete um valor que o hóspede inventou. Valor em outra moeda nunca passa: a cobrança é em reais e
+// câmbio não vem do catálogo.
 
 export interface Achado {
   trecho: string;
-  problema: 'fora_do_formato' | 'valor_nao_cotado';
+  problema: 'fora_do_formato' | 'valor_nao_cotado' | 'outra_moeda';
 }
 
 // "R$" seguido de um número nos formatos que um modelo costuma escrever: 2156, 2.156, 2156,00, 2,156.00.
 // O grupo captura o número para conferência.
 const DINHEIRO = /R\$\s*(\d[\d.,]*\d|\d)/g;
 const FORMATO = /^R\$ \d{1,3}(\.\d{3})*,\d{2}$/;
+// Valor em reais sem o símbolo ("539 reais"). Não começa no meio de um número nem logo depois de "R$".
+const REAIS = /(?<![\d.,]|R\$\s*)(\d[\d.,]*\d|\d)\s*reais\b/gi;
+// Valor em outra moeda, antes ou depois do número. "$" sozinho conta; "R$" não.
+const OUTRA_MOEDA =
+  /(?:US\$|U\$|USD|€|EUR|(?<![a-z])\$)\s*\d[\d.,]*|\d[\d.,]*\s*(?:USD|EUR|€|d[oó]lar(?:es)?|euros?)(?![\p{L}])/giu;
 
 /** Converte o número escrito num valor em centavos, se der para interpretar sem ambiguidade. */
 function paraCentavos(numero: string): number | null {
@@ -27,6 +33,12 @@ function paraCentavos(numero: string): number | null {
 
 export function verificarValores(texto: string, legitimos: readonly number[]): Achado[] {
   const achados: Achado[] = [];
+  for (const m of texto.matchAll(OUTRA_MOEDA)) achados.push({ trecho: m[0].trim(), problema: 'outra_moeda' });
+  for (const m of texto.matchAll(REAIS)) {
+    const centavos = paraCentavos(m[1]!);
+    const legitimo = centavos !== null && legitimos.includes(centavos);
+    achados.push({ trecho: m[0].trim(), problema: legitimo ? 'fora_do_formato' : 'valor_nao_cotado' });
+  }
   for (const m of texto.matchAll(DINHEIRO)) {
     const trecho = m[0].trimEnd();
     // o padrão pode engolir pontuação do fim da frase ("R$ 2.156,00.")
@@ -42,11 +54,11 @@ export function verificarValores(texto: string, legitimos: readonly number[]): A
 }
 
 export function instrucaoCorrecao(achados: Achado[]): string {
-  const itens = achados.map((a) =>
-    a.problema === 'fora_do_formato'
-      ? `"${a.trecho}" está fora do formato: escreva como R$ 1.234,56.`
-      : `"${a.trecho}" não veio de uma cotação nem do catálogo nesta conversa.`,
-  );
+  const itens = achados.map((a) => {
+    if (a.problema === 'fora_do_formato') return `"${a.trecho}" está fora do formato: escreva como R$ 1.234,56.`;
+    if (a.problema === 'outra_moeda') return `"${a.trecho}" está em outra moeda: não converta, informe só reais.`;
+    return `"${a.trecho}" não veio de uma cotação nem do catálogo nesta conversa.`;
+  });
   const naoCotado = achados.some((a) => a.problema === 'valor_nao_cotado');
   return (
     'Sua última resposta não foi enviada ao hóspede. ' +

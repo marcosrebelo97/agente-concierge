@@ -40,6 +40,28 @@ describe('verificador de valores', () => {
     expect(verificarValores('As duas noites somam R$ 1.416,00.', legitimos)[0]!.problema).toBe('valor_nao_cotado');
   });
 
+  it('acusa valor em outra moeda, antes ou depois do número', () => {
+    for (const t of ['US$ 400', 'U$ 400,00', 'USD 400', '€ 370', '$400', '400 dólares', '370 euros', '400 USD']) {
+      expect(verificarValores(`Fica uns ${t}.`, legitimos).map((a) => a.problema), t).toContain('outra_moeda');
+    }
+  });
+
+  it('acusa valor em reais sem o símbolo: não cotado ou fora do formato', () => {
+    expect(verificarValores('Fica 539 reais para cada um.', legitimos)).toEqual([
+      { trecho: '539 reais', problema: 'valor_nao_cotado' },
+    ]);
+    expect(verificarValores('O total é 2.156,00 reais.', legitimos)).toEqual([
+      { trecho: '2.156,00 reais', problema: 'fora_do_formato' },
+    ]);
+  });
+
+  it('não confunde R$, datas, telefones e números soltos com outra moeda', () => {
+    const texto =
+      'Total R$ 2.156,00 de 15/01/2027 a 18/01/2027, 3 noites, 2 hóspedes. Contato (48) 99999-0000. ' +
+      'São 400 metros da praia e a taxa é R$ 150,00 (cento e cinquenta reais).';
+    expect(verificarValores(texto, legitimos)).toEqual([]);
+  });
+
   it('acusa valor certo escrito fora do formato', () => {
     for (const t of ['R$2.156,00', 'R$ 2156,00', 'R$ 2156', 'R$ 2,156.00', 'R$ 2.156']) {
       expect(verificarValores(`total ${t}`, legitimos), t).toEqual([
@@ -55,6 +77,10 @@ describe('instrução de correção', () => {
     const inventado = instrucaoCorrecao([{ trecho: 'R$ 10,00', problema: 'valor_nao_cotado' }]);
     expect(formato).not.toMatch(/citados pelo hóspede/);
     expect(inventado).toMatch(/citados pelo hóspede/);
+  });
+
+  it('pede para não converter quando o valor está em outra moeda', () => {
+    expect(instrucaoCorrecao([{ trecho: 'US$ 400', problema: 'outra_moeda' }])).toMatch(/outra moeda.*não converta/);
   });
 });
 
