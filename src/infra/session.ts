@@ -83,10 +83,19 @@ export function redisStore<T>(redis: Redis, prefixo = 'concierge'): SessionStore
   };
 }
 
-/** Upstash quando as variáveis existem; memória caso contrário (desenvolvimento local e testes). */
+const preenchida = (v: string | undefined) => v?.trim() || undefined;
+
+/**
+ * Upstash quando as variáveis existem; memória só fora da Vercel (desenvolvimento local e testes).
+ * Configuração pela metade, ou Vercel sem Redis, falha ao subir: sessão em memória numa função
+ * serverless faria o agente esquecer a conversa entre mensagens, sem erro nenhum.
+ */
 export function storeFromEnv<T>(env: NodeJS.ProcessEnv = process.env): SessionStore<T> {
-  const url = env.UPSTASH_REDIS_REST_URL ?? env.KV_REST_API_URL;
-  const token = env.UPSTASH_REDIS_REST_TOKEN ?? env.KV_REST_API_TOKEN;
+  // Variável vazia (linha copiada do .env.example) conta como ausente.
+  const url = preenchida(env.UPSTASH_REDIS_REST_URL) ?? preenchida(env.KV_REST_API_URL);
+  const token = preenchida(env.UPSTASH_REDIS_REST_TOKEN) ?? preenchida(env.KV_REST_API_TOKEN);
   if (url && token) return redisStore<T>(new Redis({ url, token }));
+  if (url || token) throw new Error('Redis configurado pela metade: informe a URL e o token REST.');
+  if (env.VERCEL) throw new Error('Sessões exigem Redis na Vercel: configure UPSTASH_REDIS_REST_URL e _TOKEN.');
   return memoryStore<T>();
 }

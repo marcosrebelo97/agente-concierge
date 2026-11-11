@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { memoryStore, SessaoOcupadaError } from '../src/infra/session.js';
+import { memoryStore, SessaoOcupadaError, storeFromEnv } from '../src/infra/session.js';
 
 describe('sessão em memória', () => {
   it('guarda e devolve o estado pelo id, e sessão nova é null', async () => {
@@ -57,5 +57,30 @@ describe('sessão em memória', () => {
     const longo = s.withLock('a', () => new Promise((r) => setTimeout(r, 400)));
     await expect(s.withLock('a', async () => 'nunca')).rejects.toBeInstanceOf(SessaoOcupadaError);
     await longo;
+  });
+});
+
+describe('escolha do armazenamento', () => {
+  // Redis com host inexistente: só serve para saber se o Redis foi escolhido (a leitura falha na rede).
+  const REDIS = { url: 'https://redis-inexistente.invalid', token: 'x' };
+
+  it('variável vazia copiada do .env.example não esconde a outra preenchida', async () => {
+    const s = storeFromEnv({
+      UPSTASH_REDIS_REST_URL: '',
+      UPSTASH_REDIS_REST_TOKEN: ' ',
+      KV_REST_API_URL: REDIS.url,
+      KV_REST_API_TOKEN: REDIS.token,
+    });
+    await expect(s.get('a')).rejects.toThrow();
+  });
+
+  it('sem Redis e fora da Vercel, usa memória', async () => {
+    const s = storeFromEnv({ UPSTASH_REDIS_REST_URL: '', UPSTASH_REDIS_REST_TOKEN: '' });
+    expect(await s.get('a')).toBeNull();
+  });
+
+  it('falha ao subir com Redis pela metade ou na Vercel sem Redis', () => {
+    expect(() => storeFromEnv({ KV_REST_API_URL: REDIS.url })).toThrow(/pela metade/);
+    expect(() => storeFromEnv({ VERCEL: '1' })).toThrow(/exigem Redis/);
   });
 });
