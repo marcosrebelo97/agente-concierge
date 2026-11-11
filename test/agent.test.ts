@@ -139,3 +139,32 @@ describe('loop do agente', () => {
     expect(fake.chamadas).toBe(0);
   });
 });
+
+describe('passar para humano', () => {
+  it('liga handoff na resposta do turno e marca a sessão', async () => {
+    const { agent, store } = setup([
+      { ferramentas: [{ nome: 'passar_para_humano', entrada: { motivo: 'desconto_ou_negociacao', resumo: 'quer 30%' } }] },
+      { texto: 'Um atendente vai continuar.' },
+    ]);
+    expect(await agent.responder('s1', 'me dá 30% de desconto?')).toMatchObject({ reply: 'Um atendente vai continuar.', handoff: true });
+    expect((await store.get('s1'))!.humanoAcionado).toBe(true);
+  });
+
+  it('vale só no turno em que foi decidido', async () => {
+    const { agent } = setup([
+      { ferramentas: [{ nome: 'passar_para_humano', entrada: { motivo: 'reclamacao', resumo: 'x' } }] },
+      { texto: 'Um atendente vai continuar.' },
+      { texto: 'O wifi é incluso.' },
+    ]);
+    await agent.responder('s1', 'péssimo atendimento');
+    expect((await agent.responder('s1', 'tem wifi?')).handoff).toBe(false);
+  });
+
+  it('motivo fora da lista é recusado e não liga handoff', async () => {
+    const { agent } = setup([
+      { ferramentas: [{ nome: 'passar_para_humano', entrada: { motivo: 'qualquer', resumo: 'x' } }] },
+      { texto: 'ok' },
+    ]);
+    expect((await agent.responder('s1', 'oi')).handoff).toBe(false);
+  });
+});

@@ -352,9 +352,46 @@ const confirmarReserva: Ferramenta<Record<string, never>> = {
       estado.pendente = null;
       return { conteudo: { ok: true, registrado: true } };
     }
-    if (r.status === 'invalido') return { conteudo: { ok: false, motivo: 'O registro foi recusado.', erros: r.erros }, erro: true };
+    if (r.status === 'invalido') {
+      return { conteudo: { ok: false, motivo: 'O registro foi recusado.', erros: r.erros }, erro: true };
+    }
     const motivo = 'Não foi possível registrar agora (sistema indisponível). Não diga que foi registrado.';
     return { conteudo: { ok: false, motivo }, erro: true };
+  },
+};
+
+const MOTIVOS_HANDOFF = ['reclamacao', 'desconto_ou_negociacao', 'pedido_de_atendente', 'fora_do_alcance'] as const;
+
+const passarParaHumano: Ferramenta<{ motivo: (typeof MOTIVOS_HANDOFF)[number]; resumo: string }> = {
+  definicao: {
+    name: 'passar_para_humano',
+    description:
+      'Passa a conversa para um atendente humano. Use em: reclamação; pedido de desconto, negociação de preço ' +
+      'ou condição especial; pedido para falar com uma pessoa; assunto que você não consegue resolver (reserva ' +
+      'existente, cancelamento, pagamento, problema durante a estadia).',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        motivo: { type: 'string', enum: [...MOTIVOS_HANDOFF] },
+        resumo: { type: 'string', description: 'Uma frase para o atendente sobre o que o hóspede precisa' },
+      },
+      required: ['motivo', 'resumo'],
+      additionalProperties: false,
+    },
+  },
+  entrada: z.strictObject({ motivo: z.enum(MOTIVOS_HANDOFF), resumo: z.string().max(500) }),
+  async executar(e) {
+    console.log(JSON.stringify({ evento: 'handoff', motivo: e.motivo, resumo: e.resumo }));
+    return {
+      handoff: true,
+      conteudo: {
+        ok: true,
+        proximo_passo:
+          'Diga ao hóspede, em poucas palavras, que um atendente da equipe vai continuar o atendimento. ' +
+          'Não negocie nem prometa nada em nome do atendente.',
+      },
+    };
   },
 };
 
@@ -364,6 +401,7 @@ const FERRAMENTAS = [
   confirmarReserva,
   cotarEstadia,
   listarCidades,
+  passarParaHumano,
   prepararReserva,
   verImovel,
 ] as Ferramenta<unknown>[];
