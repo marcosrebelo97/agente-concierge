@@ -17,6 +17,8 @@ export interface ReservaPendente {
   turno: number;
   hash: string;
   lead: Lead;
+  /** Já houve um envio ao webhook que pode ter chegado: a próxima tentativa confere antes de enviar. */
+  envioIniciado?: boolean;
 }
 
 export interface Estado {
@@ -25,10 +27,12 @@ export interface Estado {
   turno: number;
   /** Valores em centavos vindos do catálogo ou de uma cotação: os únicos que a resposta pode citar. */
   valoresLegitimos: number[];
+  /** Cotações feitas na conversa: registro para o atendente e para auditoria; o agente não lê. */
   cotacoes: CotacaoGuardada[];
   pendente: ReservaPendente | null;
   /** Hashes das reservas já enviadas ao webhook: um lead por reserva. */
   leadsEnviados: string[];
+  /** Se a conversa já foi passada a um humano: registro para o atendimento; não muda o comportamento. */
   humanoAcionado: boolean;
 }
 

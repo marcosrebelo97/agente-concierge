@@ -18,6 +18,15 @@ const eco = {
 };
 
 describe('POST /chat', () => {
+  it('corpo grande demais: 413 no formato do contrato, sem chamar o agente', async () => {
+    let chamou = false;
+    const app = createApp({ responder: async () => ((chamou = true), eco.responder('', '')) });
+    const res = await post(app, { session_id: 'a', message: 'x'.repeat(40_000) });
+    expect(res.status).toBe(413);
+    expect(Object.keys(await res.json())).toEqual(['reply', 'handoff']);
+    expect(chamou).toBe(false);
+  });
+
   it('segue o contrato: 200 com exatamente reply e handoff', async () => {
     const res = await post(createApp(eco), { session_id: 'abc-123', message: 'oi' });
     expect(res.status).toBe(200);

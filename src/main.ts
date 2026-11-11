@@ -30,12 +30,12 @@ export function appFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const token = obrigatoria(env, 'SEAZONE_TOKEN');
   const apiKey = obrigatoria(env, 'ANTHROPIC_API_KEY');
   const esforco = esforcoDe(env);
-  const client = new Anthropic({ apiKey, maxRetries: 1 });
+  const client = new Anthropic({ apiKey });
   const agent = createAgent({
+    // timeout, signal e número de tentativas vêm do loop, a cada chamada, pelo prazo que resta
     llm: (params, opts) => client.messages.create(params, opts),
-    catalog: createCatalog({ baseUrl: `${env.CATALOGO_URL ?? `${BASE_SEAZONE}/catalogo`}/${token}` }),
-    // WEBHOOK_URL completo (com token) permite apontar os evals para um webhook local
-    webhook: createWebhook({ url: env.WEBHOOK_URL ?? `${BASE_SEAZONE}/leads/${token}` }),
+    catalog: createCatalog({ baseUrl: `${BASE_SEAZONE}/catalogo/${token}` }),
+    webhook: createWebhook({ url: `${BASE_SEAZONE}/leads/${token}` }),
     store: storeFromEnv<Estado>(env),
     modelo: env.MODELO?.trim() || MODELO_PADRAO,
     esforco,

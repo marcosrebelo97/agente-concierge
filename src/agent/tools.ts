@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { formatarData, diaDaSemana } from '../domain/dates.js';
-import { cotar, formatarReais, reaisParaCentavos } from '../domain/pricing.js';
+import { cotar, diariaFimDeSemana, formatarReais, reaisParaCentavos } from '../domain/pricing.js';
 import { confirmaReserva, hashReserva, normalizarTelefone, validarNome, type Lead } from '../domain/lead.js';
 import { CatalogError, type Catalog, type Ficha } from '../infra/catalog.js';
 import type { Webhook } from '../infra/webhook.js';
@@ -19,6 +19,10 @@ export interface Contexto {
   hoje: string;
   /** O que o hóspede escreveu neste turno: a confirmação da reserva é conferida nela. */
   mensagem: string;
+  /** Aborta no prazo do turno: nenhuma chamada externa passa dele. */
+  signal: AbortSignal;
+  /** Grava agora o estado fora do histórico (reserva, leads), antes de uma ação que não se desfaz. */
+  salvar(): Promise<void>;
 }
 
 export interface Resultado {
@@ -48,7 +52,7 @@ function fichaParaModelo(f: Ficha) {
     banheiros: f.banheiros,
     capacidade_maxima_hospedes: f.capacidade,
     diaria: formatarReais(reaisParaCentavos(f.diaria)),
-    diaria_noites_de_sexta_e_sabado: formatarReais(Math.round((reaisParaCentavos(f.diaria) * 12) / 10)),
+    diaria_noites_de_sexta_e_sabado: formatarReais(diariaFimDeSemana(reaisParaCentavos(f.diaria))),
     taxa_limpeza_por_estadia: formatarReais(reaisParaCentavos(f.taxa_limpeza)),
     minimo_noites: f.minimo_noites,
     checkin_a_partir_de: f.checkin_hora,
@@ -77,7 +81,7 @@ const listarCidades: Ferramenta<Record<string, never>> = {
   entrada: z.strictObject({}),
   async executar(_e, ctx) {
     try {
-      return { conteudo: { cidades: await ctx.catalog.cidades() } };
+      return { conteudo: { cidades: await ctx.catalog.cidades(ctx.signal) } };
     } catch (e) {
       return erroDoCatalogo(e);
     }
@@ -119,12 +123,13 @@ const buscarImoveis: Ferramenta<FiltroModelo> = {
   }),
   async executar(e, ctx) {
     try {
-      const imoveis = await ctx.catalog.buscar({
+      const filtro = {
         cidade: e.cidade ?? undefined,
         busca: e.busca ?? undefined,
         hospedes: e.hospedes ?? undefined,
         aceita_pet: e.aceita_pet ?? undefined,
-      });
+      };
+      const imoveis = await ctx.catalog.buscar(filtro, ctx.signal);
       return { conteudo: { imoveis, total: imoveis.length } };
     } catch (err) {
       return erroDoCatalogo(err);
@@ -149,9 +154,9 @@ const verImovel: Ferramenta<{ imovel_id: string }> = {
   entrada: z.strictObject({ imovel_id: idImovel }),
   async executar(e, ctx) {
     try {
-      const f = await ctx.catalog.imovel(e.imovel_id);
+      const f = await ctx.catalog.imovel(e.imovel_id, ctx.signal);
       const diaria = reaisParaCentavos(f.diaria);
-      registrarValores(ctx.estado, diaria, Math.round((diaria * 12) / 10), reaisParaCentavos(f.taxa_limpeza));
+      registrarValores(ctx.estado, diaria, diariaFimDeSemana(diaria), reaisParaCentavos(f.taxa_limpeza));
       return { conteudo: fichaParaModelo(f) };
     } catch (err) {
       return erroDoCatalogo(err);
@@ -183,7 +188,7 @@ const cotarEstadia: Ferramenta<{ imovel_id: string; checkin: string; checkout: s
   async executar(e, ctx) {
     let ficha: Ficha;
     try {
-      ficha = await ctx.catalog.imovel(e.imovel_id);
+      ficha = await ctx.catalog.imovel(e.imovel_id, ctx.signal);
     } catch (err) {
       return erroDoCatalogo(err);
     }
@@ -243,7 +248,7 @@ const prepararReserva: Ferramenta<DadosReserva> = {
       type: 'object',
       properties: {
         nome: { type: 'string', description: 'Nome do responsável pela reserva' },
-        telefone: { type: 'string', description: 'Telefone com DDD, ex.: (48) 99999-0000' },
+        telefone: { type: 'string', description: 'Telefone com DDD, ex.: (48) 99999-0000, ou internacional com +' },
         imovel_id: { type: 'string', description: 'Id do imóvel, ex.: GRM-301' },
         checkin: { type: 'string', description: 'Data de entrada, AAAA-MM-DD' },
         checkout: { type: 'string', description: 'Data de saída, AAAA-MM-DD' },
@@ -270,7 +275,7 @@ const prepararReserva: Ferramenta<DadosReserva> = {
 
     let ficha: Ficha;
     try {
-      ficha = await ctx.catalog.imovel(e.imovel_id);
+      ficha = await ctx.catalog.imovel(e.imovel_id, ctx.signal);
     } catch (err) {
       return erroDoCatalogo(err);
     }
@@ -337,6 +342,15 @@ const confirmarReserva: Ferramenta<Record<string, never>> = {
       const motivo = 'O hóspede ainda não viu o resumo. Mostre o resumo e espere a resposta dele antes de confirmar.';
       return { conteudo: { ok: false, motivo }, erro: true };
     }
+    // A confirmação responde ao resumo: vale só na mensagem logo depois dele. Um "sim" mais adiante pode
+    // estar respondendo outra pergunta.
+    if (p.turno < estado.turno - 1) {
+      estado.pendente = null;
+      const motivo =
+        'O resumo foi mostrado antes da última mensagem do hóspede. Chame preparar_reserva de novo, mostre o ' +
+        'resumo e peça a confirmação.';
+      return { conteudo: { ok: false, motivo }, erro: true };
+    }
     if (!confirmaReserva(ctx.mensagem)) {
       const motivo =
         'A mensagem do hóspede não é uma confirmação clara do resumo. Pergunte se pode registrar o pedido ' +
@@ -344,19 +358,62 @@ const confirmarReserva: Ferramenta<Record<string, never>> = {
       return { conteudo: { ok: false, motivo }, erro: true };
     }
 
-    const r = await ctx.webhook.enviar(p.lead);
-    if (r.status === 'criado') {
-      estado.leadsEnviados.push(p.hash);
-      estado.pendente = null;
-      return { conteudo: { ok: true, registrado: true } };
+    // O preço e as datas são conferidos de novo: o lead sai com o que vale agora, não com o que valia no resumo.
+    let ficha: Ficha;
+    try {
+      ficha = await ctx.catalog.imovel(p.lead.imovel_id, ctx.signal);
+    } catch (err) {
+      return erroDoCatalogo(err);
     }
+    const c = cotar(ficha, p.lead, ctx.hoje);
+    if (!c.ok || c.totalCentavos !== Math.round(p.lead.valor_total * 100)) {
+      estado.pendente = null;
+      const motivo =
+        'O preço ou as datas não valem mais como no resumo. Chame preparar_reserva de novo e mostre o novo resumo.';
+      return { conteudo: { ok: false, motivo }, erro: true };
+    }
+
+    // Se uma tentativa anterior pode ter chegado ao webhook (a função caiu ou o estado não foi gravado depois
+    // do envio), confere antes de enviar de novo.
+    if (p.envioIniciado) {
+      let chegou: boolean;
+      try {
+        chegou = await ctx.webhook.recebido(p.lead, ctx.signal);
+      } catch {
+        return naoRegistrado(estado);
+      }
+      if (chegou) return registrado(estado, ctx);
+    }
+    p.envioIniciado = true;
+    await ctx.salvar(); // se não der para gravar, não envia: sem essa marca, uma nova tentativa duplicaria
+
+    const r = await ctx.webhook.enviar(p.lead, ctx.signal);
+    if (r.status === 'criado') return registrado(estado, ctx);
     if (r.status === 'invalido') {
+      p.envioIniciado = false;
       return { conteudo: { ok: false, motivo: 'O registro foi recusado.', erros: r.erros }, erro: true };
     }
-    const motivo = 'Não foi possível registrar agora (sistema indisponível). Não diga que foi registrado.';
-    return { conteudo: { ok: false, motivo }, erro: true };
+    return naoRegistrado(estado);
   },
 };
+
+async function registrado(estado: Estado, ctx: Contexto): Promise<Resultado> {
+  estado.leadsEnviados.push(estado.pendente!.hash);
+  estado.pendente = null;
+  // Grava já: se o fim do turno não chegar ao Redis, o próximo "sim" não reenvia. Se falhar, a marca de
+  // envio iniciado faz a próxima tentativa conferir o webhook antes.
+  await ctx.salvar().catch(() => undefined);
+  return { conteudo: { ok: true, registrado: true } };
+}
+
+/** O hóspede pode confirmar de novo na próxima mensagem: a pendente conta como mostrada neste turno. */
+function naoRegistrado(estado: Estado): Resultado {
+  estado.pendente!.turno = estado.turno;
+  const motivo =
+    'Não foi possível registrar agora (sistema indisponível). Não diga que foi registrado; diga que não ' +
+    'conseguiu e pergunte se o hóspede quer tentar de novo.';
+  return { conteudo: { ok: false, motivo }, erro: true };
+}
 
 const MOTIVOS_HANDOFF = [
   'reclamacao',
@@ -386,7 +443,8 @@ const passarParaHumano: Ferramenta<{ motivo: (typeof MOTIVOS_HANDOFF)[number]; r
   },
   entrada: z.strictObject({ motivo: z.enum(MOTIVOS_HANDOFF), resumo: z.string().max(500) }),
   async executar(e) {
-    console.log(JSON.stringify({ evento: 'handoff', motivo: e.motivo, resumo: e.resumo }));
+    // O resumo é texto livre do modelo e pode ter dados do hóspede: o log guarda só o motivo.
+    console.log(JSON.stringify({ evento: 'handoff', motivo: e.motivo }));
     return {
       handoff: true,
       conteudo: {

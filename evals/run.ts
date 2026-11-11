@@ -132,7 +132,10 @@ async function rodar(caso: Caso, rodada: number): Promise<Resultado> {
   }
   if (caso.leadsFinais) falhas.push(...confereLeads(wh.recebidos, caso.leadsFinais));
   const transcricao = linhas.join('\n');
-  if (caso.juiz && args.juiz) falhas.push(...(await julgar(caso, transcricao)));
+  if (caso.juiz && args.juiz) {
+    // Erro do juiz reprova o caso, não a suíte inteira: o relatório das outras conversas não se perde.
+    falhas.push(...(await julgar(caso, transcricao).catch((e: unknown) => [`juiz falhou: ${String(e).slice(0, 120)}`])));
+  }
 
   return {
     caso: caso.id,
