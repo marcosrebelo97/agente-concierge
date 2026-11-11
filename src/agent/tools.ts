@@ -2,7 +2,9 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { formatarData, diaDaSemana } from '../domain/dates.js';
 import { cotar, formatarReais, reaisParaCentavos } from '../domain/pricing.js';
+import { confirmaReserva, hashReserva, normalizarTelefone, validarNome, type Lead } from '../domain/lead.js';
 import { CatalogError, type Catalog, type Ficha } from '../infra/catalog.js';
+import type { Webhook } from '../infra/webhook.js';
 import { registrarValores, type Estado } from './state.js';
 
 // Ferramentas do agente. O modelo escolhe qual chamar; o que cada uma devolve vem do catálogo ou
@@ -12,8 +14,11 @@ import { registrarValores, type Estado } from './state.js';
 export interface Contexto {
   estado: Estado;
   catalog: Catalog;
+  webhook: Webhook;
   /** AAAA-MM-DD em Brasília */
   hoje: string;
+  /** O que o hóspede escreveu neste turno: a confirmação da reserva é conferida nela. */
+  mensagem: string;
 }
 
 export interface Resultado {
@@ -215,8 +220,153 @@ const cotarEstadia: Ferramenta<{ imovel_id: string; checkin: string; checkout: s
   },
 };
 
+interface DadosReserva {
+  nome: string;
+  telefone: string;
+  imovel_id: string;
+  checkin: string;
+  checkout: string;
+  hospedes: number;
+}
+
+const prepararReserva: Ferramenta<DadosReserva> = {
+  definicao: {
+    name: 'preparar_reserva',
+    description:
+      'Primeiro passo para registrar o pedido de reserva, quando o hóspede quer fechar e você já tem nome, ' +
+      'telefone com DDD, imóvel, datas e número de hóspedes. Valida os dados, recalcula o preço e devolve o ' +
+      'resumo que você deve mostrar ao hóspede, pedindo que ele confirme. NÃO registra nada: o registro só ' +
+      'acontece com confirmar_reserva, depois que o hóspede responder confirmando. Se o hóspede mudar qualquer ' +
+      'dado, chame esta ferramenta de novo com os dados novos.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        nome: { type: 'string', description: 'Nome do responsável pela reserva' },
+        telefone: { type: 'string', description: 'Telefone com DDD, ex.: (48) 99999-0000' },
+        imovel_id: { type: 'string', description: 'Id do imóvel, ex.: GRM-301' },
+        checkin: { type: 'string', description: 'Data de entrada, AAAA-MM-DD' },
+        checkout: { type: 'string', description: 'Data de saída, AAAA-MM-DD' },
+        hospedes: { type: 'integer', description: 'Número total de hóspedes' },
+      },
+      required: ['nome', 'telefone', 'imovel_id', 'checkin', 'checkout', 'hospedes'],
+      additionalProperties: false,
+    },
+  },
+  entrada: z.strictObject({
+    nome: z.string().max(200),
+    telefone: z.string().max(40),
+    imovel_id: idImovel,
+    checkin: data,
+    checkout: data,
+    hospedes: z.number().int(),
+  }),
+  async executar(e, ctx) {
+    const problemas: string[] = [];
+    const nome = validarNome(e.nome);
+    if (!nome.ok) problemas.push(nome.motivo);
+    const telefone = normalizarTelefone(e.telefone);
+    if (!telefone.ok) problemas.push(telefone.motivo);
+
+    let ficha: Ficha;
+    try {
+      ficha = await ctx.catalog.imovel(e.imovel_id);
+    } catch (err) {
+      return erroDoCatalogo(err);
+    }
+    const c = cotar(ficha, e, ctx.hoje);
+    if (!c.ok) problemas.push(...c.recusas.map((r) => r.mensagem));
+    if (!nome.ok || !telefone.ok || !c.ok) return { conteudo: { ok: false, problemas } };
+
+    const lead: Lead = {
+      nome: nome.valor,
+      telefone: telefone.valor,
+      imovel_id: ficha.id,
+      checkin: c.checkin,
+      checkout: c.checkout,
+      hospedes: c.hospedes,
+      valor_total: c.totalCentavos / 100,
+    };
+    const hash = hashReserva(lead);
+    if (ctx.estado.leadsEnviados.includes(hash)) {
+      return { conteudo: { ok: false, problemas: ['Esta reserva, com estes mesmos dados, já foi registrada.'] } };
+    }
+    ctx.estado.pendente = { turno: ctx.estado.turno, hash, lead };
+    registrarValores(ctx.estado, c.totalCentavos);
+    return {
+      conteudo: {
+        ok: true,
+        resumo: {
+          nome: lead.nome,
+          telefone: lead.telefone,
+          imovel: `${ficha.nome} (${ficha.id}), ${ficha.cidade}/${ficha.uf}`,
+          entrada: `${formatarData(c.checkin)} (${diaDaSemana(c.checkin)})`,
+          saida: `${formatarData(c.checkout)} (${diaDaSemana(c.checkout)})`,
+          hospedes: lead.hospedes,
+          total: formatarReais(c.totalCentavos),
+        },
+        proximo_passo:
+          'Mostre este resumo ao hóspede e pergunte se pode registrar o pedido. Chame confirmar_reserva só ' +
+          'depois que ele responder confirmando.',
+      },
+    };
+  },
+};
+
+const confirmarReserva: Ferramenta<Record<string, never>> = {
+  definicao: {
+    name: 'confirmar_reserva',
+    description:
+      'Registra o pedido de reserva preparado por preparar_reserva, enviando-o ao time comercial. Só chame quando ' +
+      'o hóspede, na mensagem atual, confirmar o resumo que você mostrou. Não recebe dados: envia exatamente o ' +
+      'que foi preparado.',
+    strict: true,
+    input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+  },
+  entrada: z.strictObject({}),
+  async executar(_e, ctx) {
+    const { estado } = ctx;
+    const p = estado.pendente;
+    if (!p) {
+      // Depois de um envio a pendente é apagada: confirmar de novo nunca duplica o lead.
+      const motivo =
+        estado.leadsEnviados.length > 0
+          ? 'O pedido já foi registrado e não há outro pedido preparado.'
+          : 'Não há reserva preparada. Use preparar_reserva primeiro.';
+      return { conteudo: { ok: false, motivo }, erro: true };
+    }
+    if (p.turno >= estado.turno) {
+      const motivo = 'O hóspede ainda não viu o resumo. Mostre o resumo e espere a resposta dele antes de confirmar.';
+      return { conteudo: { ok: false, motivo }, erro: true };
+    }
+    if (!confirmaReserva(ctx.mensagem)) {
+      const motivo =
+        'A mensagem do hóspede não é uma confirmação clara do resumo. Pergunte se pode registrar o pedido ' +
+        'ou, se ele quer mudar algo, prepare a reserva de novo.';
+      return { conteudo: { ok: false, motivo }, erro: true };
+    }
+
+    const r = await ctx.webhook.enviar(p.lead);
+    if (r.status === 'criado') {
+      estado.leadsEnviados.push(p.hash);
+      estado.pendente = null;
+      return { conteudo: { ok: true, registrado: true } };
+    }
+    if (r.status === 'invalido') return { conteudo: { ok: false, motivo: 'O registro foi recusado.', erros: r.erros }, erro: true };
+    const motivo = 'Não foi possível registrar agora (sistema indisponível). Não diga que foi registrado.';
+    return { conteudo: { ok: false, motivo }, erro: true };
+  },
+};
+
 // Ordem fixa: a lista de ferramentas é o começo do prompt em cache.
-const FERRAMENTAS = [buscarImoveis, cotarEstadia, listarCidades, verImovel] as Ferramenta<unknown>[];
+const FERRAMENTAS = [
+  buscarImoveis,
+  confirmarReserva,
+  cotarEstadia,
+  listarCidades,
+  prepararReserva,
+  verImovel,
+] as Ferramenta<unknown>[];
 
 export const definicoes: Anthropic.Tool[] = FERRAMENTAS.map((f) => f.definicao);
 

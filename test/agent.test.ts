@@ -6,6 +6,7 @@ import { createCatalog } from '../src/infra/catalog.js';
 import { memoryStore } from '../src/infra/session.js';
 import { BASE, fakeCatalog } from './support/fake-catalog.js';
 import { fakeLlm, type Passo } from './support/fake-llm.js';
+import { fakeWebhook } from './support/fake-webhook.js';
 
 // 11/11/2026, 23h em Brasília = 12/11 02h UTC: o agente precisa usar o dia de Brasília
 const AGORA = new Date('2026-11-12T02:00:00Z');
@@ -16,6 +17,7 @@ function setup(roteiro: Passo[], extra: Partial<Parameters<typeof createAgent>[0
   const agent = createAgent({
     llm: fake.llm,
     catalog: createCatalog({ baseUrl: BASE, fetch: fakeCatalog().fetch }),
+    webhook: fakeWebhook().webhook,
     store,
     modelo: 'modelo-teste',
     agora: () => AGORA,

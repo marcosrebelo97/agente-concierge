@@ -4,6 +4,7 @@ import type { Estado } from './agent/state.js';
 import { createApp } from './app.js';
 import { createCatalog } from './infra/catalog.js';
 import { storeFromEnv } from './infra/session.js';
+import { createWebhook } from './infra/webhook.js';
 
 // Monta a aplicação a partir das variáveis de ambiente. Usado pelo servidor Node e pela Vercel.
 
@@ -23,6 +24,8 @@ export function appFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const agent = createAgent({
     llm: (params, opts) => client.messages.create(params, opts),
     catalog: createCatalog({ baseUrl: `${env.CATALOGO_URL ?? `${BASE_SEAZONE}/catalogo`}/${token}` }),
+    // WEBHOOK_URL completo (com token) permite apontar os evals para um webhook local
+    webhook: createWebhook({ url: env.WEBHOOK_URL ?? `${BASE_SEAZONE}/leads/${token}` }),
     store: storeFromEnv<Estado>(env),
     modelo: env.MODELO ?? MODELO_PADRAO,
     esforco: (env.ESFORCO as Esforco | undefined) ?? 'medium',

@@ -4,7 +4,8 @@ import type { Catalog } from '../infra/catalog.js';
 import type { SessionStore } from '../infra/session.js';
 import { SYSTEM_PROMPT } from './prompt.js';
 import { estadoInicial, type Estado } from './state.js';
-import { definicoes, executarFerramenta } from './tools.js';
+import { definicoes, executarFerramenta, type Contexto, type Resultado } from './tools.js';
+import type { Webhook } from '../infra/webhook.js';
 
 // Loop do agente, escrito à mão: o código decide quando parar, o que vai para o histórico e o que
 // volta para o hóspede. Um turno = uma mensagem do hóspede, com quantas chamadas ao modelo forem
@@ -20,6 +21,7 @@ export type Esforco = 'low' | 'medium' | 'high';
 export interface AgentDeps {
   llm: CriarMensagem;
   catalog: Catalog;
+  webhook: Webhook;
   store: SessionStore<Estado>;
   modelo: string;
   esforco?: Esforco;
@@ -52,6 +54,21 @@ const RESPOSTA_RECUSA =
 const PRAZO_MS = 50_000;
 const MAX_ITERACOES = 8;
 const FOLGA_MS = 3_000; // não começa uma chamada ao modelo com menos tempo que isso
+
+const MUDAM_ESTADO = new Set(['preparar_reserva', 'confirmar_reserva']);
+
+/**
+ * Consultas rodam em paralelo. Se a resposta tem uma ferramenta de reserva, tudo roda em sequência,
+ * na ordem do modelo: confirmar nunca corre junto com um preparar que troca a reserva pendente.
+ */
+async function executarTodas(chamadas: Anthropic.ToolUseBlock[], ctx: Contexto): Promise<Resultado[]> {
+  if (!chamadas.some((c) => MUDAM_ESTADO.has(c.name))) {
+    return Promise.all(chamadas.map((c) => executarFerramenta(c.name, c.input, ctx)));
+  }
+  const resultados: Resultado[] = [];
+  for (const c of chamadas) resultados.push(await executarFerramenta(c.name, c.input, ctx));
+  return resultados;
+}
 
 export function createAgent(deps: AgentDeps) {
   const prazoMs = deps.prazoMs ?? PRAZO_MS;
@@ -109,8 +126,8 @@ export function createAgent(deps: AgentDeps) {
 
         const chamadas = resposta.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
         if (resposta.stop_reason === 'tool_use' && chamadas.length > 0) {
-          const ctx = { estado, catalog: deps.catalog, hoje };
-          const resultados = await Promise.all(chamadas.map((c) => executarFerramenta(c.name, c.input, ctx)));
+          const ctx = { estado, catalog: deps.catalog, webhook: deps.webhook, hoje, mensagem };
+          const resultados = await executarTodas(chamadas, ctx);
           // Todos os resultados numa única mensagem, na ordem das chamadas.
           estado.mensagens.push({
             role: 'user',

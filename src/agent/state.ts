@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import type { Lead } from '../domain/lead.js';
 
 // Estado de uma conversa. O histórico vai inteiro para o modelo; o resto é o que o código usa
 // para decidir sozinho: valores que podem aparecer na resposta, reserva pendente, leads enviados.
@@ -11,6 +12,13 @@ export interface CotacaoGuardada {
   totalCentavos: number;
 }
 
+export interface ReservaPendente {
+  /** Turno em que o resumo foi mostrado: a confirmação só vale num turno posterior. */
+  turno: number;
+  hash: string;
+  lead: Lead;
+}
+
 export interface Estado {
   mensagens: Anthropic.MessageParam[];
   /** Número da mensagem do hóspede, começando em 1. */
@@ -18,11 +26,22 @@ export interface Estado {
   /** Valores em centavos vindos do catálogo ou de uma cotação: os únicos que a resposta pode citar. */
   valoresLegitimos: number[];
   cotacoes: CotacaoGuardada[];
+  pendente: ReservaPendente | null;
+  /** Hashes das reservas já enviadas ao webhook: um lead por reserva. */
+  leadsEnviados: string[];
   humanoAcionado: boolean;
 }
 
 export function estadoInicial(): Estado {
-  return { mensagens: [], turno: 0, valoresLegitimos: [], cotacoes: [], humanoAcionado: false };
+  return {
+    mensagens: [],
+    turno: 0,
+    valoresLegitimos: [],
+    cotacoes: [],
+    pendente: null,
+    leadsEnviados: [],
+    humanoAcionado: false,
+  };
 }
 
 export function registrarValores(estado: Estado, ...centavos: number[]): void {
