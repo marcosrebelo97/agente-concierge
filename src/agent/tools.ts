@@ -342,15 +342,6 @@ const confirmarReserva: Ferramenta<Record<string, never>> = {
       const motivo = 'O hóspede ainda não viu o resumo. Mostre o resumo e espere a resposta dele antes de confirmar.';
       return { conteudo: { ok: false, motivo }, erro: true };
     }
-    // A confirmação responde ao resumo: vale só na mensagem logo depois dele. Um "sim" mais adiante pode
-    // estar respondendo outra pergunta.
-    if (p.turno < estado.turno - 1) {
-      estado.pendente = null;
-      const motivo =
-        'O resumo foi mostrado antes da última mensagem do hóspede. Chame preparar_reserva de novo, mostre o ' +
-        'resumo e peça a confirmação.';
-      return { conteudo: { ok: false, motivo }, erro: true };
-    }
     if (!confirmaReserva(ctx.mensagem)) {
       const motivo =
         'A mensagem do hóspede não é uma confirmação clara do resumo. Pergunte se pode registrar o pedido ' +

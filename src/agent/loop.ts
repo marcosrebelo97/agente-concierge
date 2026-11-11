@@ -92,6 +92,8 @@ const historicoRecusado = (e: unknown) =>
   typeof e === 'object' && e !== null && 'status' in e && (e as { status: unknown }).status === 400;
 
 const MUDAM_ESTADO = new Set(['preparar_reserva', 'confirmar_reserva']);
+// Depois do resumo, uma consulta nova ou um handoff mudam o assunto: o resumo deixa de estar em discussão.
+const MUDAM_ASSUNTO = new Set(['buscar_imoveis', 'ver_imovel', 'cotar', 'listar_cidades', 'passar_para_humano']);
 
 /**
  * Consultas rodam em paralelo. Se a resposta tem uma ferramenta de reserva, tudo roda em sequência,
@@ -113,6 +115,16 @@ async function executarTodas(chamadas: Anthropic.ToolUseBlock[], ctx: Contexto):
  */
 function descartarSeNaoMostrada(estado: Estado, mostrouTextoDoModelo: boolean): void {
   if (!mostrouTextoDoModelo && estado.pendente?.turno === estado.turno) estado.pendente = null;
+}
+
+/**
+ * Um resumo de turno anterior continua valendo enquanto a conversa segue nele ("vou ver com meu chefe" e,
+ * depois, "liberou, pode registrar"). Se o turno consultou outra coisa ou passou para um humano, o assunto
+ * mudou: um "sim" mais adiante pode estar respondendo outra pergunta, então a reserva precisa de novo resumo.
+ */
+function descartarSeMudouDeAssunto(estado: Estado, ferramentas: Set<string>): void {
+  const p = estado.pendente;
+  if (p && p.turno < estado.turno && [...ferramentas].some((f) => MUDAM_ASSUNTO.has(f))) estado.pendente = null;
 }
 
 const semUso = (): Uso => ({ chamadas: 0, input: 0, cacheEscrita: 0, cacheLeitura: 0, output: 0 });
@@ -147,6 +159,7 @@ export function createAgent(deps: AgentDeps) {
     let reply: string | null = null;
     let corrigiu = false;
     let mostrouTextoDoModelo = false;
+    const usadas = new Set<string>();
     const signal = AbortSignal.timeout(Math.max(prazo - Date.now(), 0));
     const ctx: Contexto = {
       estado,
@@ -201,6 +214,7 @@ export function createAgent(deps: AgentDeps) {
         if (resposta.stop_reason === 'tool_use' && chamadas.length > 0) {
           // O conteúdo vai inteiro (inclusive blocos de raciocínio): editar o histórico invalida o cache.
           estado.mensagens.push({ role: 'assistant', content: resposta.content });
+          for (const c of chamadas) usadas.add(c.name);
           const resultados = await executarTodas(chamadas, ctx);
           // Todos os resultados numa única mensagem, na ordem das chamadas.
           estado.mensagens.push({
@@ -270,6 +284,7 @@ export function createAgent(deps: AgentDeps) {
       }
     }
     descartarSeNaoMostrada(estado, mostrouTextoDoModelo);
+    descartarSeMudouDeAssunto(estado, usadas);
     return { reply, handoff, uso, ms: Date.now() - inicio };
   }
 

@@ -98,13 +98,24 @@ describe('a resposta do código não contradiz o que aconteceu no turno', () => 
 });
 
 describe('confirmação só vale como resposta ao resumo', () => {
-  it('um "sim" duas mensagens depois do resumo não envia', async () => {
-    const { agent, wh, store } = setup([preparar, texto('Confere?'), texto('Às 15h.'), confirmar, texto('...')]);
+  it('depois de uma consulta sobre outro assunto, um "sim" não envia o resumo antigo', async () => {
+    const filtro = { cidade: 'Natal', busca: null, hospedes: null, aceita_pet: null };
+    const outro: Passo = { ferramentas: [{ nome: 'buscar_imoveis', entrada: filtro }] };
+    const roteiro = [preparar, texto('Confere?'), outro, texto('Quer ver opções?'), confirmar, texto('.')];
+    const { agent, wh, store } = setup(roteiro);
     await agent.responder('s', 'quero fechar');
-    await agent.responder('s', 'qual o horário do check-in');
+    await agent.responder('s', 'e em Natal, o que tem');
+    expect((await store.get('s'))!.pendente).toBeNull();
     await agent.responder('s', 'sim');
     expect(wh.recebidos).toHaveLength(0);
-    expect((await store.get('s'))!.pendente).toBeNull();
+  });
+
+  it('hesitação e depois confirmação, sem mudar de assunto: o resumo continua valendo', async () => {
+    const { agent, wh } = setup([preparar, texto('Confere?'), texto('Sem problema, me avise.'), confirmar, texto('Feito!')]);
+    await agent.responder('s', 'quero fechar');
+    await agent.responder('s', 'pode ser, vou ver com meu chefe');
+    await agent.responder('s', 'Liberou! Pode registrar.');
+    expect(wh.recebidos).toHaveLength(1);
   });
 
   it('o preço e as datas são conferidos de novo: check-in que passou não vira lead', async () => {
