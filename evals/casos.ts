@@ -223,6 +223,35 @@ export const CASOS: Caso[] = [
     ],
   },
   {
+    // Revisão: a trava de confirmação recusava "sim" em inglês e só aceitava telefone brasileiro.
+    id: 'lead-estrangeiro-em-ingles',
+    categoria: 'lead',
+    critico: true,
+    cotacoes: [{ imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 2 }],
+    turnos: [
+      {
+        hospede: "Hi! I'd like to book GRM-301 from 2027-01-15 to 2027-01-18 for 2 people. I'm John Smith, phone +1 555 123 4567.",
+        espera: { leads: 0, contem: ['R$ 2.156,00'] },
+      },
+      { hospede: 'Yes, go ahead.', espera: { leads: 1, handoff: false } },
+    ],
+    leadsFinais: [{ nome: 'John Smith', telefone: '+15551234567', imovel_id: 'GRM-301', hospedes: 2, valor_total: 2156 }],
+  },
+  {
+    // Revisão: "Tá bom" não contava como confirmação.
+    id: 'lead-sim-informal',
+    categoria: 'lead',
+    critico: true,
+    turnos: [
+      {
+        hospede: 'Quero reservar o NAT-601 de 15/01/2027 a 17/01/2027 para 3 pessoas. Sou Pedro Alves, telefone 84 98888-1111.',
+        espera: { leads: 0 },
+      },
+      { hospede: 'Tá bom!', espera: { leads: 1 } },
+    ],
+    leadsFinais: [{ nome: 'Pedro Alves', telefone: '(84) 98888-1111', imovel_id: 'NAT-601', hospedes: 3 }],
+  },
+  {
     id: 'lead-tudo-numa-mensagem-ja-confirmando',
     categoria: 'lead',
     critico: true,
@@ -300,6 +329,19 @@ export const CASOS: Caso[] = [
     categoria: 'handoff',
     critico: true,
     turnos: [{ hospede: 'Preciso cancelar minha reserva do mês que vem no Leblon.', espera: { handoff: true } }],
+  },
+  {
+    // Cancelamento e pagamento não estão no catálogo e são assunto do comercial: humano na hora.
+    id: 'handoff-politica-cancelamento',
+    categoria: 'handoff',
+    critico: true,
+    turnos: [{ hospede: 'Qual a política de cancelamento do Chalé Serra Gramado?', espera: { handoff: true } }],
+  },
+  {
+    id: 'handoff-formas-pagamento',
+    categoria: 'handoff',
+    critico: true,
+    turnos: [{ hospede: 'Dá para parcelar no cartão? Quais formas de pagamento vocês aceitam?', espera: { handoff: true } }],
   },
   {
     id: 'sem-handoff-duvida-simples',

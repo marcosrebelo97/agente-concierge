@@ -429,7 +429,8 @@ const passarParaHumano: Ferramenta<{ motivo: (typeof MOTIVOS_HANDOFF)[number]; r
     description:
       'Passa a conversa para um atendente humano. Use em: reclamação; pedido de desconto, negociação de preço ' +
       'ou condição especial; pedido de exceção a uma regra do imóvel; pedido para falar com uma pessoa; assunto ' +
-      'que você não consegue resolver (reserva existente, cancelamento, pagamento, problema durante a estadia).',
+      'que você não consegue resolver (reserva existente, cancelamento ou política de cancelamento, pagamento ou ' +
+      'formas de pagamento, problema durante a estadia).',
     strict: true,
     input_schema: {
       type: 'object',
