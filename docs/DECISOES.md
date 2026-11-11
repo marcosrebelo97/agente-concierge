@@ -59,7 +59,7 @@ código: o modelo conversa, o código decide preço, datas, confirmação e o qu
 | Catálogo, modelo ou webhook fora | 200 com contingência; nunca "registrado" sem 201 | Aconteceu em 11/11: o agente avisou e ofereceu atendente, sem inventar |
 | Resposta vazia, cortada ou recusada do modelo | Não entra no histórico; 400 da API recomeça a conversa | Uma mensagem inválida faria a API recusar a sessão por 7 dias |
 | Mensagens simultâneas | Lock por sessão no Redis (`SET NX`) | Duas confirmações paralelas não viram dois leads |
-| Custo de um `/chat` público | Teto de 40 mensagens ou 250 kB por sessão (depois, humano); corpo até 32 kB; limite de gasto na chave | A bateria chama sem autenticação; rate limit por IP poderia barrá-la |
+| Custo de um `/chat` público | Teto de 40 mensagens ou 250 kB por sessão (depois, humano); corpo até 32 kB; limite mensal de gasto na conta da API | A bateria chama sem autenticação; rate limit por IP poderia barrá-la |
 | `session_id` | É a credencial da conversa; não vai para o log | O contrato não tem autenticação |
 | Dados pessoais | Nome e telefone ficam só na sessão (7 dias, a janela da avaliação); logs sem PII | LGPD: guardar o mínimo pelo menor tempo útil |
 | Histórico | Conversa inteira, sem janela | Editar o histórico invalida o cache de prompt; conversas são curtas |
@@ -70,7 +70,7 @@ código: o modelo conversa, o código decide preço, datas, confirmação e o qu
 
 - **Disponibilidade real e reserva efetiva.** O catálogo não tem calendário; o lead é um pedido, e o agente
   não promete a estadia.
-- **Rate limit por IP.** Ficaram tetos por sessão e limite de gasto na chave, para não arriscar barrar a bateria.
+- **Rate limit por IP.** Ficaram tetos por sessão e um limite mensal de gasto na conta da API, para não arriscar barrar a bateria.
 - **Compactação do histórico.** Hoje há um teto por conversa; conversas longas vão para um humano.
 - **Calendário de feriados.** O agente pede as datas exatas.
 - **Fila de atendimento.** O `handoff` volta no contrato e fica registrado na sessão; não há integração com
