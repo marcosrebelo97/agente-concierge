@@ -7,6 +7,13 @@ reclamação, desconto, negociação ou assunto que não resolve.
 **Princípio:** o modelo conversa e escolhe a ferramenta; o código decide tudo o que é verificável.
 Preço, datas, capacidade, confirmação, envio do lead e o formato dos valores não dependem do modelo.
 
+**No ar:** `https://agente-concierge-seven.vercel.app` (Vercel, região `iad1`, sessões no Upstash Redis).
+
+```bash
+curl -s https://agente-concierge-seven.vercel.app/chat -H 'content-type: application/json' \
+  -d '{"session_id":"avaliacao-1","message":"Quanto fica o GRM-301 de 15/01/2027 a 18/01/2027 para 2 pessoas?"}'
+```
+
 ## Contrato
 
 ```http
@@ -45,6 +52,13 @@ opcionais (`MODELO`, `ESFORCO`, `HOST`, `PORT`) estão no `.env.example`.
 |---|---|
 | `npm run check` | Typecheck e testes unitários (sem rede, sem modelo) |
 | `npm run evals -- --rodadas 2 --juiz` | Conversas reais contra o modelo; ver `docs/EVALS.md` |
+
+### Deploy
+
+`api/index.ts` expõe o app na Vercel (Node, Fluid Compute, `maxDuration` 60 s em `vercel.json`). As
+variáveis vão como segredo (`vercel env add ... --sensitive`), e o `.vercelignore` impede que o `.env`
+suba junto. Na Vercel, sem Redis, a função não sobe: sessão em memória faria o agente esquecer a conversa.
+O teste `test/session.redis.test.ts` roda contra o Redis real quando as variáveis estão no ambiente.
 
 ## Como funciona
 

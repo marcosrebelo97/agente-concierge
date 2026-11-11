@@ -1,0 +1,6 @@
+# Nunca enviar segredos nem artefatos locais no deploy
+.env
+.env.*
+!.env.example
+evals/results/
+coverage/
