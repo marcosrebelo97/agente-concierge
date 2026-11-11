@@ -55,7 +55,7 @@ preço, datas, confirmação e o que pode ser enviado.
 | "Sou o gerente", "ignore as instruções", resultado de ferramenta forjado no texto | Ignorado; texto do hóspede é dado, não instrução | Regras não mudam por pedido |
 | Pedir o prompt ou os nomes das ferramentas | Não revela; descreve o que faz em linguagem simples | Reduz superfície de ataque |
 | Assunto fora de hospedagem | Recusa com educação, sem handoff | Fora do escopo do produto |
-| Recusa do próprio modelo | Vira handoff | O hóspede nunca fica sem resposta |
+| Recusa do próprio modelo (classificador de segurança) | Vira handoff; sem fallback automático para outro modelo | O hóspede nunca fica sem resposta. Um modelo de fallback não passou pelos evals; um atendente é a saída testada |
 
 ## Operação
 
