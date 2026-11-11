@@ -66,7 +66,8 @@ export const CASOS: Caso[] = [
     turnos: [
       {
         hospede: 'O Flat Ponta Negra, em Natal, tem café da manhã? Quanto custa?',
-        espera: { contem: [R('opcional|à parte|a parte')], naoContem: [R('R\\$')] },
+        // Preços da hospedagem podem aparecer; preço do café, não (a ficha não tem).
+        espera: { contem: [R('opcional|à parte|a parte')], naoContem: [R('caf[eé][^.\\n]{0,60}R\\$'), R('R\\$[^.\\n]{0,40}caf[eé]')] },
       },
     ],
     juiz: 'O agente afirmou um preço, horário ou detalhe do café da manhã que não está na ficha (a ficha só diz "cafe da manha opcional pago a parte")?',
