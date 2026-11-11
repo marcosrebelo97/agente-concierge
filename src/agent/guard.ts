@@ -51,6 +51,7 @@ export function instrucaoCorrecao(achados: Achado[]): string {
     'Sua última resposta não foi enviada ao hóspede. ' +
     itens.join(' ') +
     ' Reescreva a resposta usando só valores devolvidos pelas ferramentas (chame cotar ou ver_imovel se ' +
-    'precisar), sem calcular nada por conta própria.'
+    'precisar), sem calcular nada por conta própria. Não repita valores citados pelo hóspede, nem para negá-los: ' +
+    'diga apenas o valor correto.'
   );
 }

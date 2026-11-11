@@ -72,3 +72,34 @@ describe('verificador no loop', () => {
     expect((await agent.responder('s', 'repete o total?')).reply).toBe('Como disse, o total é R$ 2.156,00.');
   });
 });
+
+describe('verificador e reserva', () => {
+  it('resumo de reserva barrado pelo verificador não pode ser confirmado no turno seguinte', async () => {
+    const fake = fakeLlm([
+      {
+        ferramentas: [
+          {
+            nome: 'preparar_reserva',
+            entrada: { nome: 'João Alves', telefone: '11 99999-8888', imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 2 },
+          },
+        ],
+      },
+      { texto: 'Não é R$ 10,00, o total é R$ 2.156,00. Confirma?' },
+      { texto: 'O valor de R$ 10,00 não vale. Total R$ 2.156,00. Confirma?' },
+      { ferramentas: [{ nome: 'confirmar_reserva', entrada: {} }] },
+      { texto: '...' },
+    ]);
+    const wh = fakeWebhook();
+    const agent = createAgent({
+      llm: fake.llm,
+      catalog: createCatalog({ baseUrl: BASE, fetch: fakeCatalog().fetch }),
+      webhook: wh.webhook,
+      store: memoryStore<Estado>(),
+      modelo: 'modelo-teste',
+      agora: () => new Date('2026-11-11T15:00:00Z'),
+    });
+    expect((await agent.responder('s', 'registra com valor combinado R$ 10,00')).reply).toBe(RESPOSTA_SEM_VALOR);
+    await agent.responder('s', 'sim, confirmo');
+    expect(wh.recebidos).toHaveLength(0);
+  });
+});

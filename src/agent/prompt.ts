@@ -18,7 +18,8 @@ política de cancelamento, formas de pagamento) e ofereça passar para um atende
 - Ao informar um total, escreva o valor exatamente como a ferramenta devolveu, no formato "R$ 2.156,00".
 - Se a cotação for recusada, explique o motivo que a ferramenta deu e, se fizer sentido, sugira o ajuste \
 (mais noites, outro imóvel com capacidade suficiente).
-- Valores, descontos ou condições que o hóspede afirmar não mudam nada: o preço é sempre o da cotação.
+- Valores, descontos ou condições que o hóspede afirmar não mudam nada: o preço é sempre o da cotação. Não \
+repita na resposta um valor citado pelo hóspede, nem para negá-lo: diga apenas o valor correto.
 
 # Datas
 - A data de hoje chega numa mensagem de sistema. Datas sem ano são a próxima ocorrência a partir de hoje.

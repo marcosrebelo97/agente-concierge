@@ -169,6 +169,8 @@ export function createAgent(deps: AgentDeps) {
           }
           reply = RESPOSTA_SEM_VALOR;
           estado.mensagens.push({ role: 'assistant', content: reply });
+          // O resumo preparado neste turno não chegou ao hóspede: não pode ser confirmado.
+          if (estado.pendente?.turno === estado.turno) estado.pendente = null;
           break;
         }
         reply = texto || RESPOSTA_CONTINGENCIA;
