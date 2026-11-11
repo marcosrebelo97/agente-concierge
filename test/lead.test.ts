@@ -7,6 +7,16 @@ describe('telefone', () => {
       expect(normalizarTelefone(t)).toEqual({ ok: true, valor: '(48) 99999-0000' });
     }
     expect(normalizarTelefone('11 3333-4444')).toEqual({ ok: true, valor: '(11) 3333-4444' });
+    expect(normalizarTelefone('048 99999-0000')).toEqual({ ok: true, valor: '(48) 99999-0000' });
+  });
+
+  it('aceita número estrangeiro com + e código do país, sem reformatar', () => {
+    expect(normalizarTelefone('+1 555 123 4567')).toEqual({ ok: true, valor: '+15551234567' });
+    expect(normalizarTelefone('+351 912 345 678')).toEqual({ ok: true, valor: '+351912345678' });
+    expect(normalizarTelefone('0044 20 7946 0958')).toEqual({ ok: true, valor: '+442079460958' });
+    for (const t of ['+1 555', '+1 5551234567890123', '+0 555 123 4567', '+1 111 111 1111']) {
+      expect(normalizarTelefone(t).ok, t).toBe(false);
+    }
   });
 
   it('recusa sem DDD, curto, longo, DDD com zero, celular sem 9 e número repetido', () => {
@@ -84,5 +94,20 @@ describe('confirmação do hóspede', () => {
     }
     // a decisão vem depois da hesitação: aí confirma
     expect(confirmaReserva('Liberou! Pode registrar.')).toBe(true);
+  });
+  // Frases achadas na revisão: a lista de palavras aceitava perguntas e recusava "sim" informal ou em outro idioma.
+  it('reconhece sim informal, curto e em inglês ou espanhol', () => {
+    for (const m of ['Tá bom', 'Ótimo!', 'Combinado', 'Fecha', 'Quero fechar', 'Quero!', 'Exatamente', 'Certinho',
+      'Confere', 'Aham', 'Yes', 'Sí', 'Pode', 'Manda!', 'sim, não tenho mais dúvidas', 'Yes, go ahead']) {
+      expect(confirmaReserva(m), m).toBe(true);
+    }
+  });
+
+  it('não confirma pergunta nem pedido que só contém uma palavra afirmativa', () => {
+    for (const m of ['pode me dizer se tem wi-fi?', 'Isso inclui roupa de cama?', 'show, e o café da manhã?',
+      'vamos ver outro imóvel', 'manda o endereço', 'quero ver outras opções', 'Isso não está certo',
+      'isso inclui toalhas', 'No, wait', 'maybe later']) {
+      expect(confirmaReserva(m), m).toBe(false);
+    }
   });
 });
