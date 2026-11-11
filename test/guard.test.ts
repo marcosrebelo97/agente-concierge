@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
 import { createAgent, RESPOSTA_RESERVA_DESCARTADA, RESPOSTA_SEM_VALOR } from '../src/agent/loop.js';
-import { verificarValores } from '../src/agent/guard.js';
+import { instrucaoCorrecao, verificarValores } from '../src/agent/guard.js';
 import type { Estado } from '../src/agent/state.js';
 import { createCatalog } from '../src/infra/catalog.js';
 import { memoryStore } from '../src/infra/session.js';
@@ -46,6 +46,15 @@ describe('verificador de valores', () => {
         { trecho: t, problema: 'fora_do_formato' },
       ]);
     }
+  });
+});
+
+describe('instrução de correção', () => {
+  it('fala de valores do hóspede só quando há valor não cotado', () => {
+    const formato = instrucaoCorrecao([{ trecho: 'R$ 2156', problema: 'fora_do_formato' }]);
+    const inventado = instrucaoCorrecao([{ trecho: 'R$ 10,00', problema: 'valor_nao_cotado' }]);
+    expect(formato).not.toMatch(/citados pelo hóspede/);
+    expect(inventado).toMatch(/citados pelo hóspede/);
   });
 });
 

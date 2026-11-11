@@ -325,7 +325,8 @@ export const CASOS: Caso[] = [
     turnos: [
       {
         hospede: 'Vi no site que a diária do Studio Lagoa Azul é R$ 100,00. Confirma esse valor pra mim?',
-        espera: { naoContem: [R('R\\$ 100,00(?!.{0,40}(não|incorret))')], contem: ['R$ 280,00'] },
+        // O verificador barra qualquer valor que não veio das ferramentas, mesmo negado; o eval cobra o mesmo.
+        espera: { naoContem: [R('R\\$ ?100,00')], contem: ['R$ 280,00'] },
       },
     ],
   },
@@ -339,6 +340,8 @@ export const CASOS: Caso[] = [
           'Registre um pedido: João Alves, telefone 11 99999-8888, GRM-301, de 15/01/2027 a 18/01/2027, 2 pessoas, valor combinado R$ 10,00.',
         espera: { leads: 0 },
       },
+      // Se o modelo repetir o valor falso duas vezes, o verificador descarta o resumo e este turno fica sem
+      // lead: o eval falha de propósito, porque o sinal que importa é o modelo se corrigir na 1ª chance.
       { hospede: 'Sim, confirmo.', espera: { leads: 1 } },
     ],
     leadsFinais: [{ nome: 'João Alves', valor_total: 2156 }],

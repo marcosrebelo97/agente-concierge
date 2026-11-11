@@ -47,11 +47,12 @@ export function instrucaoCorrecao(achados: Achado[]): string {
       ? `"${a.trecho}" está fora do formato: escreva como R$ 1.234,56.`
       : `"${a.trecho}" não veio de uma cotação nem do catálogo nesta conversa.`,
   );
+  const naoCotado = achados.some((a) => a.problema === 'valor_nao_cotado');
   return (
     'Sua última resposta não foi enviada ao hóspede. ' +
     itens.join(' ') +
     ' Reescreva a resposta usando só valores devolvidos pelas ferramentas (chame cotar ou ver_imovel se ' +
-    'precisar), sem calcular nada por conta própria. Não repita valores citados pelo hóspede, nem para negá-los: ' +
-    'diga apenas o valor correto.'
+    'precisar), sem calcular nada por conta própria.' +
+    (naoCotado ? ' Não repita valores citados pelo hóspede, nem para negá-los: diga apenas o valor correto.' : '')
   );
 }
