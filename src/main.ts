@@ -17,18 +17,28 @@ function obrigatoria(env: NodeJS.ProcessEnv, nome: string): string {
   return v;
 }
 
+const ESFORCOS: readonly Esforco[] = ['low', 'medium', 'high'];
+
+/** Valor inválido falha ao subir, não no primeiro /chat com um 400 da API. */
+function esforcoDe(env: NodeJS.ProcessEnv): Esforco {
+  const v = env.ESFORCO?.trim() || 'medium';
+  if (!ESFORCOS.includes(v as Esforco)) throw new Error(`ESFORCO inválido: ${v} (use ${ESFORCOS.join(', ')})`);
+  return v as Esforco;
+}
+
 export function appFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const token = obrigatoria(env, 'SEAZONE_TOKEN');
-  obrigatoria(env, 'ANTHROPIC_API_KEY');
-  const client = new Anthropic({ maxRetries: 1 });
+  const apiKey = obrigatoria(env, 'ANTHROPIC_API_KEY');
+  const esforco = esforcoDe(env);
+  const client = new Anthropic({ apiKey, maxRetries: 1 });
   const agent = createAgent({
     llm: (params, opts) => client.messages.create(params, opts),
     catalog: createCatalog({ baseUrl: `${env.CATALOGO_URL ?? `${BASE_SEAZONE}/catalogo`}/${token}` }),
     // WEBHOOK_URL completo (com token) permite apontar os evals para um webhook local
     webhook: createWebhook({ url: env.WEBHOOK_URL ?? `${BASE_SEAZONE}/leads/${token}` }),
     store: storeFromEnv<Estado>(env),
-    modelo: env.MODELO ?? MODELO_PADRAO,
-    esforco: (env.ESFORCO as Esforco | undefined) ?? 'medium',
+    modelo: env.MODELO?.trim() || MODELO_PADRAO,
+    esforco,
   });
   return createApp(agent);
 }
