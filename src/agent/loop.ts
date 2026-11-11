@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { diaDaSemana, formatarData, hojeEmBrasilia } from '../domain/dates.js';
 import type { Catalog } from '../infra/catalog.js';
 import type { SessionStore } from '../infra/session.js';
+import { instrucaoCorrecao, verificarValores } from './guard.js';
 import { SYSTEM_PROMPT } from './prompt.js';
 import { estadoInicial, type Estado } from './state.js';
 import { definicoes, executarFerramenta, type Contexto, type Resultado } from './tools.js';
@@ -48,6 +49,10 @@ export interface RespostaTurno {
 
 export const RESPOSTA_CONTINGENCIA =
   'Desculpe, tive um problema para concluir sua solicitação agora. Pode repetir, por favor?';
+export const RESPOSTA_SEM_VALOR =
+  'Desculpe, não consegui conferir os valores agora. Para eu refazer a cotação, me diga o imóvel, as datas de ' +
+  'entrada e saída e o número de hóspedes.';
+export const AVISO_VERIFICADOR = '[Verificação automática do sistema, não é mensagem do hóspede]';
 const RESPOSTA_RECUSA =
   'Não consigo ajudar com isso por aqui. Vou passar sua conversa para um atendente da nossa equipe.';
 
@@ -90,6 +95,7 @@ export function createAgent(deps: AgentDeps) {
 
     let handoff = false;
     let reply: string | null = null;
+    let corrigiu = false;
 
     try {
       for (let i = 0; i < maxIteracoes && reply === null; i++) {
@@ -150,6 +156,21 @@ export function createAgent(deps: AgentDeps) {
           .map((b) => b.text)
           .join('\n')
           .trim();
+
+        const achados = verificarValores(texto, estado.valoresLegitimos);
+        if (achados.length > 0) {
+          console.log(JSON.stringify({ evento: 'guard', turno: estado.turno, achados, segunda_vez: corrigiu }));
+          if (!corrigiu) {
+            // Uma chance de reescrever. Vai como mensagem de usuário marcada: mensagem de sistema não pode
+            // vir logo depois de uma resposta do assistente.
+            corrigiu = true;
+            estado.mensagens.push({ role: 'user', content: `${AVISO_VERIFICADOR} ${instrucaoCorrecao(achados)}` });
+            continue;
+          }
+          reply = RESPOSTA_SEM_VALOR;
+          estado.mensagens.push({ role: 'assistant', content: reply });
+          break;
+        }
         reply = texto || RESPOSTA_CONTINGENCIA;
       }
     } catch (erro) {
@@ -176,8 +197,8 @@ export function createAgent(deps: AgentDeps) {
         const estado = (await deps.store.get(sessionId)) ?? estadoInicial();
         const r = await turno(estado, mensagem);
         await deps.store.set(sessionId, estado);
-        const log = { evento: 'turno', sessao: sessionId, turno: estado.turno, handoff: r.handoff, ms: r.ms, uso: r.uso };
-        console.log(JSON.stringify(log));
+        const { handoff, ms, uso } = r;
+        console.log(JSON.stringify({ evento: 'turno', sessao: sessionId, turno: estado.turno, handoff, ms, uso }));
         return r;
       });
     },
