@@ -358,15 +358,21 @@ const confirmarReserva: Ferramenta<Record<string, never>> = {
   },
 };
 
-const MOTIVOS_HANDOFF = ['reclamacao', 'desconto_ou_negociacao', 'pedido_de_atendente', 'fora_do_alcance'] as const;
+const MOTIVOS_HANDOFF = [
+  'reclamacao',
+  'desconto_ou_negociacao',
+  'excecao_a_regra',
+  'pedido_de_atendente',
+  'fora_do_alcance',
+] as const;
 
 const passarParaHumano: Ferramenta<{ motivo: (typeof MOTIVOS_HANDOFF)[number]; resumo: string }> = {
   definicao: {
     name: 'passar_para_humano',
     description:
       'Passa a conversa para um atendente humano. Use em: reclamação; pedido de desconto, negociação de preço ' +
-      'ou condição especial; pedido para falar com uma pessoa; assunto que você não consegue resolver (reserva ' +
-      'existente, cancelamento, pagamento, problema durante a estadia).',
+      'ou condição especial; pedido de exceção a uma regra do imóvel; pedido para falar com uma pessoa; assunto ' +
+      'que você não consegue resolver (reserva existente, cancelamento, pagamento, problema durante a estadia).',
     strict: true,
     input_schema: {
       type: 'object',
