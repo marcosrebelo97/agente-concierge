@@ -1,6 +1,5 @@
-import { Redis } from '@upstash/redis';
 import { describe, expect, it } from 'vitest';
-import { redisStore, SessaoOcupadaError, TTL_SEGUNDOS } from '../src/infra/session.js';
+import { clienteRedis, redisStore, SessaoOcupadaError, TTL_SEGUNDOS } from '../src/infra/session.js';
 
 // Integração com um Upstash real. Só roda com as variáveis no ambiente:
 //   npx vitest run test/session.redis.test.ts   (com o .env carregado, ex.: node --env-file=.env)
@@ -10,7 +9,7 @@ const url = process.env.UPSTASH_REDIS_REST_URL?.trim() || process.env.KV_REST_AP
 const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim() || process.env.KV_REST_API_TOKEN?.trim();
 
 describe.skipIf(!url || !token)('sessão no Redis real', () => {
-  const redis = new Redis({ url: url!, token: token! });
+  const redis = clienteRedis(url!, token!); // a mesma configuração de produção (timeout e tentativas)
   const prefixo = `teste-${crypto.randomUUID()}`;
   const store = redisStore<Record<string, unknown>>(redis, prefixo);
   const limpar = async () => {

@@ -7,8 +7,11 @@ import { Redis } from '@upstash/redis';
 export interface SessionStore<T> {
   get(id: string): Promise<T | null>;
   set(id: string, valor: T): Promise<void>;
-  /** Executa `fn` com exclusividade sobre a sessão: duas mensagens da mesma conversa não se misturam. */
-  withLock<R>(id: string, fn: () => Promise<R>): Promise<R>;
+  /**
+   * Executa `fn` com exclusividade sobre a sessão: duas mensagens da mesma conversa não se misturam.
+   * Espera o lock até ESPERA_LOCK_MS, e nunca a ponto de deixar menos de TURNO_MINIMO_MS até o `prazo`.
+   */
+  withLock<R>(id: string, fn: () => Promise<R>, prazo?: number): Promise<R>;
 }
 
 export class SessaoOcupadaError extends Error {
@@ -19,11 +22,14 @@ export class SessaoOcupadaError extends Error {
 }
 
 export const TTL_SEGUNDOS = 7 * 24 * 3600;
-const LOCK_MS = 60_000; // nunca menor que o tempo máximo de um turno
-const ESPERA_LOCK_MS = 20_000;
-const INTERVALO_MS = 150;
+const LOCK_MS = 60_000; // nunca menor que o tempo máximo de um turno (o prazo da requisição)
+const ESPERA_LOCK_MS = 10_000;
+const TURNO_MINIMO_MS = 25_000;
+const INTERVALO_MS = 250;
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const limiteDaEspera = (esperaMs: number, prazo?: number) =>
+  Math.min(Date.now() + esperaMs, prazo === undefined ? Infinity : prazo - TURNO_MINIMO_MS);
 
 export function memoryStore<T>(opts: { esperaLockMs?: number } = {}): SessionStore<T> {
   const dados = new Map<string, string>();
@@ -38,8 +44,8 @@ export function memoryStore<T>(opts: { esperaLockMs?: number } = {}): SessionSto
     async set(id, valor) {
       dados.set(id, JSON.stringify(valor));
     },
-    async withLock(id, fn) {
-      const limite = Date.now() + esperaLockMs;
+    async withLock(id, fn, prazo) {
+      const limite = limiteDaEspera(esperaLockMs, prazo);
       while (locks.has(id)) {
         if (Date.now() > limite) throw new SessaoOcupadaError();
         await espera(INTERVALO_MS);
@@ -67,9 +73,9 @@ export function redisStore<T>(redis: Redis, prefixo = 'concierge'): SessionStore
     async set(id, valor) {
       await redis.set(chave(id), valor, { ex: TTL_SEGUNDOS });
     },
-    async withLock(id, fn) {
+    async withLock(id, fn, prazo) {
       const dono = crypto.randomUUID();
-      const limite = Date.now() + ESPERA_LOCK_MS;
+      const limite = limiteDaEspera(ESPERA_LOCK_MS, prazo);
       while ((await redis.set(chaveLock(id), dono, { nx: true, px: LOCK_MS })) !== 'OK') {
         if (Date.now() > limite) throw new SessaoOcupadaError();
         await espera(INTERVALO_MS);
@@ -83,6 +89,15 @@ export function redisStore<T>(redis: Redis, prefixo = 'concierge'): SessionStore
   };
 }
 
+/**
+ * Cada comando tem 3 s e uma nova tentativa: um Redis lento não pode consumir o prazo da resposta.
+ * O signal vai como função: com um AbortSignal fixo, a biblioteca trata o abort como resposta vazia,
+ * e a sessão seria lida como nova (o agente esqueceria a conversa sem erro nenhum).
+ */
+export function clienteRedis(url: string, token: string): Redis {
+  return new Redis({ url, token, retry: { retries: 1 }, signal: () => AbortSignal.timeout(3_000) });
+}
+
 const preenchida = (v: string | undefined) => v?.trim() || undefined;
 
 /**
@@ -94,7 +109,7 @@ export function storeFromEnv<T>(env: NodeJS.ProcessEnv = process.env): SessionSt
   // Variável vazia (linha copiada do .env.example) conta como ausente.
   const url = preenchida(env.UPSTASH_REDIS_REST_URL) ?? preenchida(env.KV_REST_API_URL);
   const token = preenchida(env.UPSTASH_REDIS_REST_TOKEN) ?? preenchida(env.KV_REST_API_TOKEN);
-  if (url && token) return redisStore<T>(new Redis({ url, token }));
+  if (url && token) return redisStore<T>(clienteRedis(url, token));
   if (url || token) throw new Error('Redis configurado pela metade: informe a URL e o token REST.');
   if (env.VERCEL) throw new Error('Sessões exigem Redis na Vercel: configure UPSTASH_REDIS_REST_URL e _TOKEN.');
   return memoryStore<T>();

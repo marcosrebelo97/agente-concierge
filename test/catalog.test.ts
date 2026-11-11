@@ -91,4 +91,32 @@ describe('catálogo', () => {
     const torta = (async () => new Response(JSON.stringify({ id: 'GRM-301' }), { status: 200 })) as typeof fetch;
     expect((await erro(createCatalog({ baseUrl: BASE, fetch: torta }).imovel('GRM-301'))).tipo).toBe('indisponivel');
   });
+
+  it('JSON inválido vira indisponivel, e resposta torta não fica em cache', async () => {
+    let n = 0;
+    const f = (async () => {
+      n++;
+      if (n === 1) return new Response('<html>erro</html>', { status: 200 });
+      if (n === 2) return new Response(JSON.stringify({ cidades: 'x' }), { status: 200 });
+      return new Response(JSON.stringify({ cidades: [] }), { status: 200 });
+    }) as typeof fetch;
+    const catalog = createCatalog({ baseUrl: BASE, fetch: f });
+    expect((await erro(catalog.cidades())).tipo).toBe('indisponivel');
+    expect((await erro(catalog.cidades())).tipo).toBe('indisponivel');
+    expect(await catalog.cidades()).toEqual([]);
+    expect(n).toBe(3);
+  });
+
+  it('para no prazo do turno, sem nova tentativa', async () => {
+    let n = 0;
+    const pendurado = ((_u: string, init?: RequestInit) => {
+      n++;
+      return new Promise((_r, rejeita) => init?.signal?.addEventListener('abort', () => rejeita(init.signal!.reason)));
+    }) as typeof fetch;
+    const catalog = createCatalog({ baseUrl: BASE, fetch: pendurado, timeoutMs: 5_000 });
+    const inicio = Date.now();
+    expect((await erro(catalog.imovel('GRM-301', AbortSignal.timeout(50)))).tipo).toBe('indisponivel');
+    expect(Date.now() - inicio).toBeLessThan(1_000);
+    expect(n).toBe(1);
+  });
 });

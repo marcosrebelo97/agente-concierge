@@ -9,8 +9,11 @@ export type ResultadoEnvio =
   | { status: 'falha'; motivo: string };
 
 export interface Webhook {
-  enviar(lead: Lead): Promise<ResultadoEnvio>;
-  listar(): Promise<Lead[]>;
+  /** `signal` corta as tentativas no prazo do turno. */
+  enviar(lead: Lead, signal?: AbortSignal): Promise<ResultadoEnvio>;
+  listar(signal?: AbortSignal): Promise<Lead[]>;
+  /** O lead já está no webhook? Lança se não for possível conferir. */
+  recebido(lead: Lead, signal?: AbortSignal): Promise<boolean>;
 }
 
 export interface WebhookOptions {
@@ -19,7 +22,7 @@ export interface WebhookOptions {
   timeoutMs?: number;
 }
 
-function mesmoLead(a: Lead, b: Lead): boolean {
+export function mesmoLead(a: Lead, b: Lead): boolean {
   return (
     a.nome === b.nome &&
     a.telefone === b.telefone &&
@@ -35,20 +38,25 @@ export function createWebhook(opts: WebhookOptions): Webhook {
   const doFetch = opts.fetch ?? fetch;
   const timeoutMs = opts.timeoutMs ?? 8_000;
 
-  async function listar(): Promise<Lead[]> {
-    const res = await doFetch(opts.url, { signal: AbortSignal.timeout(timeoutMs) });
+  const limite = (signal?: AbortSignal) =>
+    signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs), signal]) : AbortSignal.timeout(timeoutMs);
+
+  async function listar(signal?: AbortSignal): Promise<Lead[]> {
+    const res = await doFetch(opts.url, { signal: limite(signal) });
     if (!res.ok) throw new Error(`webhook GET ${res.status}`);
-    const corpo = (await res.json()) as { leads?: Lead[] };
-    return corpo.leads ?? [];
+    const corpo = (await res.json()) as { leads?: unknown };
+    // Formato inesperado não pode virar "lista vazia": isso faria uma nova tentativa duplicar o lead.
+    if (!Array.isArray(corpo.leads)) throw new Error('webhook GET em formato inesperado');
+    return corpo.leads as Lead[];
   }
 
-  async function postar(lead: Lead): Promise<ResultadoEnvio | null> {
+  async function postar(lead: Lead, signal?: AbortSignal): Promise<ResultadoEnvio | null> {
     try {
       const res = await doFetch(opts.url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(lead),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: limite(signal),
       });
       if (res.status === 201 || res.status === 200) return { status: 'criado' };
       if (res.status === 422 || res.status === 400) {
@@ -63,18 +71,24 @@ export function createWebhook(opts: WebhookOptions): Webhook {
     }
   }
 
+  async function recebido(lead: Lead, signal?: AbortSignal): Promise<boolean> {
+    return (await listar(signal)).some((l) => mesmoLead(l, lead));
+  }
+
   return {
     listar,
-    async enviar(lead) {
-      const primeira = await postar(lead);
+    recebido,
+    async enviar(lead, signal) {
+      const primeira = await postar(lead, signal);
       if (primeira) return primeira;
+      const indisponivel = { status: 'falha', motivo: 'webhook indisponível' } as const;
+      if (signal?.aborted) return indisponivel; // sem tempo para conferir nem tentar de novo
       try {
-        if ((await listar()).some((l) => mesmoLead(l, lead))) return { status: 'criado' };
+        if (await recebido(lead, signal)) return { status: 'criado' };
       } catch {
-        // sem como conferir: não arrisca duplicar
-        return { status: 'falha', motivo: 'webhook indisponível' };
+        return indisponivel; // sem como conferir: não arrisca duplicar
       }
-      return (await postar(lead)) ?? { status: 'falha', motivo: 'webhook indisponível' };
+      return (await postar(lead, signal)) ?? indisponivel;
     },
   };
 }

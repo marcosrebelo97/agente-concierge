@@ -61,10 +61,11 @@ export class CatalogError extends Error {
   }
 }
 
+/** `signal` corta a consulta e a nova tentativa no prazo do turno. */
 export interface Catalog {
-  cidades(): Promise<Cidade[]>;
-  buscar(filtro: FiltroBusca): Promise<Resumo[]>;
-  imovel(id: string): Promise<Ficha>;
+  cidades(signal?: AbortSignal): Promise<Cidade[]>;
+  buscar(filtro: FiltroBusca, signal?: AbortSignal): Promise<Resumo[]>;
+  imovel(id: string, signal?: AbortSignal): Promise<Ficha>;
 }
 
 export interface CatalogOptions {
@@ -77,28 +78,42 @@ export interface CatalogOptions {
 
 /** Id no formato do catálogo (ex.: GRM-301). Evita montar URL com texto arbitrário vindo do modelo. */
 const ID = /^[A-Z]{3}-\d{3}$/;
+/** Teto de consultas em cache por instância: a busca é texto livre e a instância pode ficar quente por horas. */
+const MAX_CACHE = 200;
 
 export function createCatalog(opts: CatalogOptions): Catalog {
   const doFetch = opts.fetch ?? fetch;
   const timeoutMs = opts.timeoutMs ?? 5_000;
   const ttlMs = opts.ttlMs ?? 10 * 60_000;
   const now = opts.now ?? Date.now;
-  const cache = new Map<string, { expira: number; corpo: unknown }>();
+  // Guarda só respostas já validadas: uma resposta fora do formato não fica 10 minutos servindo erro.
+  const cache = new Map<string, { expira: number; valor: unknown }>();
 
-  async function tentar(url: string): Promise<Response> {
-    return doFetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: 'application/json' } });
+  async function tentar(url: string, signal?: AbortSignal): Promise<Response> {
+    const limite = AbortSignal.timeout(timeoutMs);
+    return doFetch(url, {
+      signal: signal ? AbortSignal.any([limite, signal]) : limite,
+      headers: { accept: 'application/json' },
+    });
   }
 
-  async function get(caminho: string): Promise<unknown> {
+  function guardar(url: string, valor: unknown): void {
+    const agora = now();
+    for (const [k, v] of cache) if (v.expira <= agora) cache.delete(k);
+    if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value!); // a mais antiga
+    cache.set(url, { expira: agora + ttlMs, valor });
+  }
+
+  async function get<T>(caminho: string, schema: z.ZodType<T>, signal?: AbortSignal): Promise<T> {
     const url = `${opts.baseUrl}${caminho}`;
     const hit = cache.get(url);
-    if (hit && hit.expira > now()) return hit.corpo;
+    if (hit && hit.expira > now()) return hit.valor as T;
 
     let res: Response | undefined;
     // Uma nova tentativa só para falha de rede, timeout ou 5xx; 4xx é resposta definitiva.
-    for (let tentativa = 0; tentativa < 2; tentativa++) {
+    for (let tentativa = 0; tentativa < 2 && !signal?.aborted; tentativa++) {
       try {
-        res = await tentar(url);
+        res = await tentar(url, signal);
         if (res.status < 500) break;
       } catch {
         res = undefined;
@@ -113,23 +128,24 @@ export function createCatalog(opts: CatalogOptions): Catalog {
     }
     if (!res.ok) throw new CatalogError('indisponivel', `O catálogo respondeu ${res.status}.`);
 
-    const corpo: unknown = await res.json();
-    cache.set(url, { expira: now() + ttlMs, corpo });
-    return corpo;
-  }
-
-  function parse<T>(schema: z.ZodType<T>, corpo: unknown): T {
+    let corpo: unknown;
+    try {
+      corpo = await res.json();
+    } catch {
+      throw new CatalogError('indisponivel', 'O catálogo respondeu num formato inesperado.');
+    }
     const r = schema.safeParse(corpo);
     if (!r.success) throw new CatalogError('indisponivel', 'O catálogo respondeu num formato inesperado.');
+    guardar(url, r.data);
     return r.data;
   }
 
   return {
-    async cidades() {
-      return parse(ListaCidades, await get('/cidades')).cidades;
+    async cidades(signal) {
+      return (await get('/cidades', ListaCidades, signal)).cidades;
     },
 
-    async buscar(filtro) {
+    async buscar(filtro, signal) {
       const params = new URLSearchParams();
       if (filtro.cidade?.trim()) params.set('cidade', filtro.cidade.trim());
       if (filtro.busca?.trim()) params.set('busca', filtro.busca.trim());
@@ -139,13 +155,13 @@ export function createCatalog(opts: CatalogOptions): Catalog {
       if (filtro.hospedes !== undefined) params.set('hospedes', String(filtro.hospedes));
       if (filtro.aceita_pet !== undefined) params.set('aceita_pet', String(filtro.aceita_pet));
       params.sort(); // mesma consulta, mesma URL, mesmo cache
-      return parse(ListaImoveis, await get(`/imoveis?${params}`)).imoveis;
+      return (await get(`/imoveis?${params}`, ListaImoveis, signal)).imoveis;
     },
 
-    async imovel(id) {
+    async imovel(id, signal) {
       const normalizado = id.trim().toUpperCase();
       if (!ID.test(normalizado)) throw new CatalogError('nao_encontrado', `Não existe imóvel com o código "${id}".`);
-      return parse(Ficha, await get(`/imoveis/${normalizado}`));
+      return get(`/imoveis/${normalizado}`, Ficha, signal);
     },
   };
 }

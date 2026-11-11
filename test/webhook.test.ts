@@ -62,4 +62,20 @@ describe('webhook de leads', () => {
     expect((await s.webhook.enviar(LEAD)).status).toBe('falha');
     expect(s.posts()).toBe(2);
   });
+  it('GET em formato inesperado não vira "nenhum lead": falha em vez de arriscar duplicar', async () => {
+    const f = (async (_u: string, init?: RequestInit) => {
+      if (!init?.method) return new Response(JSON.stringify({ itens: [] }));
+      throw new TypeError('fetch failed');
+    }) as typeof fetch;
+    const webhook = createWebhook({ url: 'https://wh.test/leads/T', fetch: f });
+    await expect(webhook.recebido(LEAD)).rejects.toThrow(/formato inesperado/);
+    expect((await webhook.enviar(LEAD)).status).toBe('falha');
+  });
+
+  it('sem tempo no turno, não confere nem tenta de novo', async () => {
+    const s = servidor(['rede', 201]);
+    const acabou = AbortSignal.abort();
+    expect((await s.webhook.enviar(LEAD, acabou)).status).toBe('falha');
+    expect(s.gravados).toHaveLength(0);
+  });
 });
