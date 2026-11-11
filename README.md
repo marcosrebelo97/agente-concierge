@@ -10,8 +10,9 @@ Preço, datas, capacidade, confirmação, envio do lead e o formato dos valores 
 **No ar:** `https://agente-concierge-seven.vercel.app` (Vercel, região `iad1`, sessões no Upstash Redis).
 
 ```bash
+# use um session_id novo por conversa (ex.: a saída de uuidgen)
 curl -s https://agente-concierge-seven.vercel.app/chat -H 'content-type: application/json' \
-  -d '{"session_id":"avaliacao-1","message":"Quanto fica o GRM-301 de 15/01/2027 a 18/01/2027 para 2 pessoas?"}'
+  -d '{"session_id":"3f1c2b9e-7a4d-4e8b-9c1a-5d6e7f8a9b0c","message":"Quanto fica o GRM-301 de 15/01/2027 a 18/01/2027 para 2 pessoas?"}'
 ```
 
 ## Contrato
@@ -24,11 +25,13 @@ POST /chat
 {"reply": "... O total fica R$ 2.156,00 ...", "handoff": false}
 ```
 
-- A memória é por `session_id` (7 dias). `handoff: true` vale para a resposta em que o agente passou a
-  conversa para um humano.
-- Sempre `200` com `{reply, handoff}`, inclusive quando o modelo ou o catálogo falham (resposta de
-  contingência). `400` só para corpo inválido.
-- Cada turno termina em até 50 s, abaixo dos 60 s do contrato.
+- A memória é por `session_id` (7 dias). O contrato não tem autenticação: o `session_id` é a credencial
+  da conversa, então use um id imprevisível (UUID). `handoff: true` vale para a resposta em que o agente
+  passou a conversa para um humano.
+- `200` com `{reply, handoff}` para todo corpo válido, inclusive quando o modelo, o catálogo ou o Redis
+  falham (resposta de contingência). `400` para corpo inválido, `413` acima de 32 kB.
+- Prazo único de 52 s desde a chegada da requisição, para tudo: lock, Redis, modelo, catálogo e webhook.
+  Se algo escapar, uma rede final responde 200 aos 57 s, antes do corte da Vercel aos 60 s.
 - `GET /health` para monitoramento.
 
 ## Como rodar
@@ -44,13 +47,14 @@ curl -s 127.0.0.1:3000/chat -H 'content-type: application/json' \
   -d '{"session_id":"teste","message":"Quanto fica o GRM-301 de 15/01/2027 a 18/01/2027 para 2 pessoas?"}'
 ```
 
-Sem `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`, as sessões ficam em memória (só para
-desenvolvimento). Configuração inválida falha ao subir, não no meio de uma conversa. As variáveis
+Sem Redis (`UPSTASH_REDIS_REST_URL`/`_TOKEN`, ou `KV_REST_API_URL`/`_TOKEN`, os nomes que a Vercel
+injeta), as sessões ficam em memória (só para desenvolvimento). Configuração inválida falha ao subir, não no meio de uma conversa. As variáveis
 opcionais (`MODELO`, `ESFORCO`, `HOST`, `PORT`) estão no `.env.example`.
 
 | Comando | O que faz |
 |---|---|
 | `npm run check` | Typecheck e testes unitários (sem rede, sem modelo) |
+| `node --env-file=.env node_modules/.bin/vitest run test/session.redis.test.ts` | Sessão e lock contra o Redis real |
 | `npm run evals -- --rodadas 2 --juiz` | Conversas reais contra o modelo; ver `docs/EVALS.md` |
 
 ### Deploy
@@ -85,47 +89,63 @@ hóspede ── POST /chat ──> app.ts (Zod, sempre 200)
 |---|---|
 | O modelo nunca calcula dinheiro: `cotar` recebe só imóvel, datas e hóspedes e busca a ficha no servidor | `src/domain/pricing.ts`, `src/agent/tools.ts` |
 | Nenhum valor sai sem conferência: valor não cotado, fora do formato `R$ 1.234,56` ou em outra moeda volta ao modelo uma vez; na segunda, a resposta é trocada por uma segura | `src/agent/guard.ts` |
-| Lead só com resumo mostrado num turno anterior, confirmação explícita no turno atual (sem mudança nem hesitação) e um por reserva; `valor_total` sai da cotação | `src/agent/tools.ts`, `src/domain/lead.ts` |
+| Lead só com confirmação na mensagem logo depois do resumo (sem pergunta, mudança, hesitação nem negação), preço recotado na confirmação; `valor_total` sai da cotação | `src/agent/tools.ts`, `src/domain/lead.ts` |
 | Resumo que o hóspede não viu (prazo, erro, recusa, verificador) é descartado | `src/agent/loop.ts` |
+| Um lead por reserva, mesmo com queda no meio: estado gravado antes e depois do envio, e nova tentativa confere o webhook antes | `src/agent/tools.ts`, `src/infra/webhook.ts` |
 | Duas mensagens simultâneas da mesma sessão não viram dois leads | `src/infra/session.ts` |
-| Falha de rede no webhook confere por GET antes de tentar de novo | `src/infra/webhook.ts` |
+| Resposta vazia, cortada ou recusada do modelo não entra no histórico; a sessão nunca fica presa num erro | `src/agent/loop.ts` |
+| Teto de 40 mensagens ou 250 kB por sessão: depois disso, humano sem chamar o modelo | `src/agent/loop.ts` |
 
 As decisões sobre o que o enunciado não define (desconto, exceção de regra, datas, capacidade,
 confirmação, falhas) estão em [`docs/DECISOES.md`](docs/DECISOES.md).
 
 ## Custo por conversa
 
-Medido com o `usage` de cada chamada nos evals (54 conversas, 2 rodadas, catálogo real), com os preços
+Medido com o `usage` de cada chamada nos evals (58 conversas, 2 rodadas, catálogo real), com os preços
 oficiais por milhão de tokens: Sonnet 5.5 US$ 2 entrada, US$ 10 saída, US$ 0,10 leitura de cache;
 Haiku 5.5 US$ 0,10, US$ 0,50 e US$ 0,01; escrita de cache a 1,25× a entrada.
 
 | | **Sonnet 5.5** (produção) | Haiku 5.5 |
 |---|---|---|
-| Conversa média dos evals (1,5 turno) | **US$ 0,016** | US$ 0,001 |
-| Por turno | US$ 0,011 | US$ 0,0007 |
+| Conversa média dos evals (1,5 turno) | **US$ 0,017** | US$ 0,001 |
+| Por turno | US$ 0,012 | US$ 0,0007 |
 | Reserva completa: cotação, dados, resumo e confirmação (4 turnos, 8 chamadas) | **US$ 0,018** | US$ 0,0014 |
-| Conversas de 4 turnos, média | US$ 0,026 | US$ 0,0016 |
+| Conversas de 4 turnos, média | US$ 0,025 | US$ 0,0016 |
 
-- **Prompt caching:** prompt do sistema e ferramentas ficam em cache, e cerca de 77% dos tokens de
+- **Prompt caching:** prompt do sistema e ferramentas ficam em cache, e cerca de 74% dos tokens de
   entrada são lidos do cache. A data de hoje entra como mensagem de sistema no fim do histórico para não
   quebrar o prefixo.
 - **Cache frio:** a primeira conversa depois de 5 minutos sem tráfego paga a escrita do prefixo
   (cerca de 6,5 mil tokens, US$ 0,016 no Sonnet) uma vez.
-- **Ordem de grandeza:** mil conversas por dia custam cerca de US$ 16 a 26 com o Sonnet, ou US$ 1 a 2 com
+- **Ordem de grandeza:** mil conversas por dia custam cerca de US$ 17 a 25 com o Sonnet, ou US$ 1 a 2 com
   o Haiku, que também passou em todos os evals e entra trocando `MODELO`.
 
 ## Como foi feito
 
+Feito com Claude Code. O que ficou no repositório:
+
 - [`CLAUDE.md`](CLAUDE.md): os invariantes que nenhuma mudança pode quebrar e o fluxo de trabalho.
 - [`.claude/agents/`](.claude/agents): dois subagentes da software factory.
-  - `hospede-adversario` escreve casos de eval como um hóspede real ou mal-intencionado. Só edita
-    `evals/casos-adversario.ts`, tira valores de `evals/cotar.ts` e não acessa rede nem `.env`.
+  - `hospede-adversario` escreve casos de eval como um hóspede real ou mal-intencionado. É instruído a só
+    editar `evals/casos-adversario.ts` e a tirar os valores de `evals/cotar.ts`.
   - `revisor-de-evals` lê as falhas, classifica (bug do agente, eval errado, lacuna de política) e propõe
-    a correção mínima, sem alterar arquivos.
-- `/code-review` antes de fechar cada etapa; os achados viraram commits `fix:`.
-- [`docs/EVALS.md`](docs/EVALS.md): metodologia, resultados e o que cada rodada encontrou.
-- [`docs/DECISOES.md`](docs/DECISOES.md): as lacunas do enunciado e o porquê de cada decisão.
-- O histórico do git conta a ordem real: cada commit é pequeno e cita o achado que o motivou.
+    a correção mínima. Só tem ferramentas de leitura.
+- [`.claude/settings.json`](.claude/settings.json): bloqueia a leitura de `.env`, `.env.local` e `.vercel/`.
+
+O que foi usado na sessão, sem ficar no repositório:
+
+- **Skills:** `claude-api` (referência do SDK, preços e prompt caching) e `vercel-functions` (deploy).
+- **MCP:** Claude in Chrome, para criar o Redis no marketplace da Vercel. O agente em produção não usa MCP.
+- **Revisão:** `/code-review` antes de fechar cada etapa; no fim, quatro subagentes revisaram o projeto em
+  paralelo (conformidade com o enunciado, segurança, robustez, entrega) e os achados confirmados viraram os
+  commits `fix:` finais.
+- **Prompts:** o do agente está em [`src/agent/prompt.ts`](src/agent/prompt.ts); os da factory, nos
+  subagentes.
+
+E a documentação: [`docs/EVALS.md`](docs/EVALS.md) com metodologia, resultados e o que cada rodada
+encontrou; [`docs/DECISOES.md`](docs/DECISOES.md) com as lacunas do enunciado, o que ficou de fora e o que
+faria com mais tempo. O histórico do git segue a ordem real, e cada `fix:` cita o eval ou a revisão que o
+motivou.
 
 ## Estrutura
 
