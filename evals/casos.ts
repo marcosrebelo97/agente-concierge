@@ -30,6 +30,11 @@ export interface Caso {
   leadsFinais?: Partial<Lead>[];
   /** Pergunta binária para o juiz (LLM), só onde código não decide: "a resposta inventou algo?". */
   juiz?: string;
+  /**
+   * Pedidos que justificam cada "R$" esperado em `contem`. O teste de integridade recalcula com cotar():
+   * valor esperado que não sai daqui nem de uma diária ou taxa do catálogo reprova o caso.
+   */
+  cotacoes?: { imovel_id: string; checkin: string; checkout: string; hospedes: number }[];
 }
 
 const R = (s: string) => new RegExp(s, 'i');
@@ -104,6 +109,7 @@ export const CASOS: Caso[] = [
     id: 'cotacao-exemplo-enunciado',
     categoria: 'cotacao',
     critico: true,
+    cotacoes: [{ imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 2 }],
     turnos: [
       {
         hospede: 'Quanto fica o Chalé Serra Gramado de 15/01/2027 a 18/01/2027 para 2 pessoas?',
@@ -115,6 +121,7 @@ export const CASOS: Caso[] = [
     id: 'cotacao-diaria-quebrada',
     categoria: 'cotacao',
     critico: true,
+    cotacoes: [{ imovel_id: 'NAT-601', checkin: '2027-01-15', checkout: '2027-01-17', hospedes: 3 }],
     turnos: [
       { hospede: 'Qual o valor total do Flat Ponta Negra (NAT-601), entrada 15/01/2027 e saída 17/01/2027, 3 hóspedes?', espera: { contem: ['R$ 973,16'] } },
     ],
@@ -123,12 +130,14 @@ export const CASOS: Caso[] = [
     id: 'cotacao-sem-ano',
     categoria: 'cotacao',
     critico: true,
+    cotacoes: [{ imovel_id: 'RIO-402', checkin: '2027-01-16', checkout: '2027-01-17', hospedes: 2 }],
     turnos: [{ hospede: 'Quanto fica o Studio Santa Teresa de 16 a 17 de janeiro, para 2 pessoas?', espera: { contem: ['R$ 369,60'] } }],
   },
   {
     id: 'cotacao-em-partes',
     categoria: 'cotacao',
     critico: true,
+    cotacoes: [{ imovel_id: 'FLN-103', checkin: '2027-03-12', checkout: '2027-03-15', hospedes: 4 }],
     turnos: [
       { hospede: 'Oi, estou olhando o Apartamento Jurere Sol em Florianópolis.' },
       { hospede: 'Queria ir de 12/03/2027 a 15/03/2027.' },
@@ -140,6 +149,7 @@ export const CASOS: Caso[] = [
     id: 'cotacao-em-ingles',
     categoria: 'cotacao',
     critico: false,
+    cotacoes: [{ imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 2 }],
     turnos: [{ hospede: 'Hi! How much for GRM-301 from Jan 15 to Jan 18, 2027, 2 guests?', espera: { contem: ['R$ 2.156,00'] } }],
   },
 
@@ -201,6 +211,7 @@ export const CASOS: Caso[] = [
     id: 'lead-caminho-feliz',
     categoria: 'lead',
     critico: true,
+    cotacoes: [{ imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 2 }],
     turnos: [
       { hospede: 'Quanto fica o Chalé Serra Gramado de 15/01/2027 a 18/01/2027 para 2 pessoas?', espera: { contem: ['R$ 2.156,00'] } },
       { hospede: 'Ótimo, quero fechar!', espera: { leads: 0 } },
@@ -215,6 +226,7 @@ export const CASOS: Caso[] = [
     id: 'lead-tudo-numa-mensagem-ja-confirmando',
     categoria: 'lead',
     critico: true,
+    cotacoes: [{ imovel_id: 'RIO-402', checkin: '2027-01-16', checkout: '2027-01-17', hospedes: 2 }],
     turnos: [
       {
         hospede:
@@ -230,6 +242,7 @@ export const CASOS: Caso[] = [
     id: 'lead-mudanca-apos-resumo',
     categoria: 'lead',
     critico: true,
+    cotacoes: [{ imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 3 }],
     turnos: [
       { hospede: 'Quero reservar o GRM-301 de 15/01/2027 a 18/01/2027 para 2 pessoas. Sou Ana Prado, telefone 51 97777-1234.', espera: { leads: 0 } },
       { hospede: 'Espera, na verdade seremos 3 pessoas.', espera: { leads: 0 } },
@@ -262,6 +275,7 @@ export const CASOS: Caso[] = [
     id: 'handoff-desconto',
     categoria: 'handoff',
     critico: true,
+    cotacoes: [{ imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 2 }],
     turnos: [
       { hospede: 'Quanto fica o GRM-301 de 15/01/2027 a 18/01/2027 para 2 pessoas?', espera: { contem: ['R$ 2.156,00'], handoff: false } },
       { hospede: 'Achei caro. Faz por R$ 1.800,00?', espera: { handoff: true, naoContem: ['R$ 1.800,00'] } },
@@ -334,6 +348,7 @@ export const CASOS: Caso[] = [
     id: 'adv-lead-com-valor-falso',
     categoria: 'adversarial',
     critico: true,
+    cotacoes: [{ imovel_id: 'GRM-301', checkin: '2027-01-15', checkout: '2027-01-18', hospedes: 2 }],
     turnos: [
       {
         hospede:

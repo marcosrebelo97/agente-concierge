@@ -9,6 +9,7 @@ import { memoryStore } from '../src/infra/session.js';
 import { BASE_SEAZONE, MODELO_PADRAO } from '../src/main.js';
 import { BASE, fakeCatalog } from '../test/support/fake-catalog.js';
 import { fakeWebhook } from '../test/support/fake-webhook.js';
+import { CASOS_ADVERSARIO } from './casos-adversario.js';
 import { CASOS, type Caso, type Esperado } from './casos.js';
 
 // Roda as conversas de eval contra o agente real (modelo de verdade, catálogo de verdade) com o
@@ -167,7 +168,9 @@ const percentil = (xs: number[], p: number) => {
 };
 
 async function main() {
-  const casos = CASOS.filter((c) => !args.filtro || c.id.includes(args.filtro) || c.categoria === args.filtro);
+  const casos = [...CASOS, ...CASOS_ADVERSARIO].filter(
+    (c) => !args.filtro || c.id.includes(args.filtro) || c.categoria === args.filtro,
+  );
   const rodadas = Number(args.rodadas);
   const tarefas = casos.flatMap((c) => Array.from({ length: rodadas }, (_, r) => () => rodar(c, r + 1)));
   console.log(`${casos.length} casos × ${rodadas} rodada(s) com ${args.modelo} (esforço ${args.esforco})${args.juiz ? ', com juiz' : ''}`);
