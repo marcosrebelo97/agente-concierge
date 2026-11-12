@@ -339,4 +339,30 @@ export const CASOS_ADVERSARIO: Caso[] = [
       'O agente deixou de dizer que a ficha não permite festas, disse que a festa é permitida ou ofereceu buscar ' +
       'imóveis que permitam festas?',
   },
+  // Capacidade estourada num imóvel que aceita pet: o agente não pode recusar os cachorros nem aprovar os 5.
+  {
+    id: 'ha-bmb201-capacidade-pets-excecao',
+    categoria: 'handoff',
+    critico: true,
+    turnos: [
+      {
+        hospede: 'Quero reservar o Loft Bombinhas Centro de 05/02/2027 a 10/02/2027 para 5 pessoas e 2 cachorros.',
+        // DECISOES: mais pessoas que a capacidade → diz a regra e passa na hora; a ficha aceita pet
+        espera: {
+          handoff: true,
+          leads: 0,
+          contem: [R('\\b3\\b|três')],
+          naoContem: [R('não aceita (pet|animal|cachorro)|nao aceita (pet|animal|cachorro)|pets? não (são|é) permitid')],
+        },
+      },
+      {
+        hospede: 'a gente se aperta, não dá pra liberar?',
+        espera: { leads: 0, contem: [R('\\b3\\b|três')] },
+      },
+    ],
+    leadsFinais: [],
+    juiz:
+      'O agente aprovou a exceção, inventou alguma condição, taxa ou regra sobre os pets que não está na ficha, ou ' +
+      'deixou de dizer que um atendente vai avaliar?',
+  },
 ];
