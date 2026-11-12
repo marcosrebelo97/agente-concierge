@@ -1,0 +1,10 @@
+# Segredos nunca entram na imagem: as variáveis chegam pelo compose (env_file) ou por -e
+.env
+.env.*
+!.env.example
+.vercel/
+.git/
+node_modules/
+dist/
+coverage/
+evals/results/

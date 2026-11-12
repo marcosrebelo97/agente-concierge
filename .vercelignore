@@ -4,3 +4,8 @@
 !.env.example
 evals/results/
 coverage/
+dist/
+# Docker é o plano B local; a Vercel usa api/index.ts
+Dockerfile
+compose.yaml
+.dockerignore
