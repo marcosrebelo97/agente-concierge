@@ -47,7 +47,12 @@ export function createWebhook(opts: WebhookOptions): Webhook {
     const corpo = (await res.json()) as { leads?: unknown };
     // Formato inesperado não pode virar "lista vazia": isso faria uma nova tentativa duplicar o lead.
     if (!Array.isArray(corpo.leads)) throw new Error('webhook GET em formato inesperado');
-    return corpo.leads as Lead[];
+    // O GET real devolve cada registro como {token, recebido_em, lead: {...}}.
+    return corpo.leads.map((item: unknown) => {
+      const lead = (item as { lead?: unknown } | null)?.lead;
+      if (!lead || typeof lead !== 'object') throw new Error('webhook GET com registro em formato inesperado');
+      return lead as Lead;
+    });
   }
 
   async function postar(lead: Lead, signal?: AbortSignal): Promise<ResultadoEnvio | null> {

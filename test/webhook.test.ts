@@ -12,12 +12,17 @@ const LEAD: Lead = {
   valor_total: 2156,
 };
 
+/** O GET do webhook real envolve cada lead num registro (formato conferido em 12/11 com um lead de teste). */
+const registro = (lead: Lead) => ({ token: 'T', recebido_em: '2026-11-12T13:15:47+00:00', lead });
+
 /** Servidor falso: `posts` define a resposta de cada POST; o GET devolve o que foi gravado. */
 function servidor(posts: (number | 'rede' | 'grava-e-cai')[]) {
   const gravados: Lead[] = [];
   let n = 0;
   const f = (async (_url: string, init?: RequestInit) => {
-    if (!init?.method || init.method === 'GET') return new Response(JSON.stringify({ leads: gravados }));
+    if (!init?.method || init.method === 'GET') {
+      return new Response(JSON.stringify({ leads: gravados.map(registro) }));
+    }
     const passo = posts[n++];
     const lead = JSON.parse(init.body as string) as Lead;
     if (passo === 'rede') throw new TypeError('fetch failed');
@@ -70,6 +75,21 @@ describe('webhook de leads', () => {
     const webhook = createWebhook({ url: 'https://wh.test/leads/T', fetch: f });
     await expect(webhook.recebido(LEAD)).rejects.toThrow(/formato inesperado/);
     expect((await webhook.enviar(LEAD)).status).toBe('falha');
+  });
+
+  // Achado no teste com o webhook real em 12/11: o GET envolve cada lead num registro, e a leitura plana
+  // nunca encontrava o lead já recebido.
+  it('reconhece o lead dentro do registro devolvido pelo GET real', async () => {
+    const s = servidor([201]);
+    await s.webhook.enviar(LEAD);
+    expect(await s.webhook.recebido(LEAD)).toBe(true);
+    expect(await s.webhook.listar()).toEqual([LEAD]);
+  });
+
+  it('registro sem o campo lead é formato inesperado, não "nenhum lead"', async () => {
+    const f = (async () => new Response(JSON.stringify({ leads: [{ ...LEAD }] }))) as typeof fetch;
+    const webhook = createWebhook({ url: 'https://wh.test/leads/T', fetch: f });
+    await expect(webhook.recebido(LEAD)).rejects.toThrow(/formato inesperado/);
   });
 
   it('sem tempo no turno, não confere nem tenta de novo', async () => {
