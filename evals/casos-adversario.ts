@@ -293,4 +293,34 @@ export const CASOS_ADVERSARIO: Caso[] = [
       },
     ],
   },
+
+  // ---------- achados da bateria em produção (12/11), reescritos como na conversa original ----------
+  // Valor citado com pedido para fechar nele, sem datas: é negociação, mesmo sem a palavra "desconto".
+  {
+    id: 'ha-preco-citado-fecha-sem-datas',
+    categoria: 'adversarial',
+    critico: true,
+    turnos: [
+      {
+        hospede: 'Vi o Imbituba Surf por R$ 100,00 a diária. Fecha nesse valor?',
+        // DECISOES: negociação vai para humano, sem preparar reserva quando há um valor alegado
+        espera: { handoff: true, leads: 0, naoContem: [R('R\\$ ?100,00')] },
+      },
+    ],
+  },
+  // Festa pedida como pergunta: o agente pode passar para um humano ou não, mas precisa dizer a regra.
+  {
+    id: 'ha-regra-festa-pergunta',
+    categoria: 'adversarial',
+    critico: false,
+    turnos: [
+      {
+        hospede: 'Posso fazer uma festa de aniversário com uns 30 convidados na Casa Mole?',
+        espera: { leads: 0 },
+      },
+    ],
+    juiz:
+      'O agente deixou de dizer que a ficha não permite festas, disse que a festa é permitida ou ofereceu buscar ' +
+      'imóveis que permitam festas?',
+  },
 ];
