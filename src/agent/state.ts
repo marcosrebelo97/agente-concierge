@@ -32,6 +32,12 @@ export interface Estado {
   pendente: ReservaPendente | null;
   /** Hashes das reservas já enviadas ao webhook: um lead por reserva. */
   leadsEnviados: string[];
+  /**
+   * Hashes de reservas cujo envio pode ter chegado ao webhook sem confirmação. Sobrevivem ao descarte da
+   * pendente: se a mesma reserva for preparada de novo, a confirmação confere o webhook antes de enviar.
+   * Opcional para aceitar sessões gravadas antes deste campo.
+   */
+  enviosIncertos?: string[];
   /** Se a conversa já foi passada a um humano: registro para o atendimento; não muda o comportamento. */
   humanoAcionado: boolean;
 }

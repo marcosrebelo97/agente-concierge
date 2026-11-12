@@ -297,6 +297,8 @@ const prepararReserva: Ferramenta<DadosReserva> = {
       return { conteudo: { ok: false, problemas: ['Esta reserva, com estes mesmos dados, já foi registrada.'] } };
     }
     ctx.estado.pendente = { turno: ctx.estado.turno, hash, lead };
+    // Um envio anterior desta mesma reserva pode ter chegado: a confirmação confere o webhook antes.
+    if (ctx.estado.enviosIncertos?.includes(hash)) ctx.estado.pendente.envioIniciado = true;
     registrarValores(ctx.estado, c.totalCentavos);
     return {
       conteudo: {
@@ -376,20 +378,28 @@ const confirmarReserva: Ferramenta<Record<string, never>> = {
       if (chegou) return registrado(estado, ctx);
     }
     p.envioIniciado = true;
+    marcarIncerto(estado, p.hash, true);
     await ctx.salvar(); // se não der para gravar, não envia: sem essa marca, uma nova tentativa duplicaria
 
     const r = await ctx.webhook.enviar(p.lead, ctx.signal);
     if (r.status === 'criado') return registrado(estado, ctx);
     if (r.status === 'invalido') {
       p.envioIniciado = false;
+      marcarIncerto(estado, p.hash, false);
       return { conteudo: { ok: false, motivo: 'O registro foi recusado.', erros: r.erros }, erro: true };
     }
     return naoRegistrado(estado);
   },
 };
 
+function marcarIncerto(estado: Estado, hash: string, incerto: boolean): void {
+  const lista = (estado.enviosIncertos ?? []).filter((h) => h !== hash);
+  estado.enviosIncertos = incerto ? [...lista, hash] : lista;
+}
+
 async function registrado(estado: Estado, ctx: Contexto): Promise<Resultado> {
   estado.leadsEnviados.push(estado.pendente!.hash);
+  marcarIncerto(estado, estado.pendente!.hash, false);
   estado.pendente = null;
   // Grava já: se o fim do turno não chegar ao Redis, o próximo "sim" não reenvia. Se falhar, a marca de
   // envio iniciado faz a próxima tentativa conferir o webhook antes.

@@ -180,3 +180,38 @@ describe('fluxo do lead', () => {
     expect(resultados(fake, 3)[0]).toMatchObject({ ok: false, erro: true });
   });
 });
+
+// Achado da revisão de 12/11: o envio chegou ao webhook, mas a resposta se perdeu; no mesmo turno o modelo
+// falhou e a pendente foi descartada. Preparada de novo, a reserva era enviada uma segunda vez.
+describe('envio incerto sobrevive ao descarte da pendente', () => {
+  it('a mesma reserva preparada de novo confere o webhook antes de enviar e não duplica', async () => {
+    const fake = fakeLlm([
+      preparar(), texto('Confere os dados?'),
+      confirmar, { erro: new Error('overloaded') },
+      preparar(), texto('Confere os dados de novo?'),
+      confirmar, texto('Pedido registrado.'),
+    ]);
+    let falhar = true;
+    const wh = fakeWebhook(() => (falhar ? { status: 'falha', motivo: 'rede' } : { status: 'criado' }), true);
+    const store = memoryStore<Estado>();
+    const agent = createAgent({
+      llm: fake.llm,
+      catalog: createCatalog({ baseUrl: BASE, fetch: fakeCatalog().fetch }),
+      webhook: wh.webhook,
+      store,
+      modelo: 'modelo-teste',
+      agora: () => new Date('2026-11-11T15:00:00Z'),
+    });
+
+    await agent.responder('s', 'quero fechar');
+    await agent.responder('s', 'sim'); // o lead chega, mas o envio volta com erro e o modelo falha em seguida
+    expect((await store.get('s'))!.pendente).toBeNull();
+    falhar = false;
+    await agent.responder('s', 'sim, pode refazer');
+    await agent.responder('s', 'sim');
+
+    expect(wh.posts).toBe(1);
+    expect(wh.recebidos).toHaveLength(1);
+    expect((await store.get('s'))!.enviosIncertos).toEqual([]);
+  });
+});
