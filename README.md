@@ -7,6 +7,9 @@ caso de reclamação, pedido de desconto, negociação ou assunto que não conse
 **Princípio:** o modelo conversa e escolhe a ferramenta; o código decide tudo o que é verificável.
 Preço, datas, capacidade, confirmação, envio do lead e o formato dos valores não dependem do modelo.
 
+**Stack:** TypeScript (Node 22), Hono, Zod, SDK oficial da Anthropic com loop próprio, Upstash Redis e Vercel
+([por quê](docs/DECISOES.md#stack)).
+
 **No ar:** `https://agente-concierge-seven.vercel.app` (Vercel, região `iad1`, sessões no Upstash Redis).
 
 ```bash
@@ -167,7 +170,7 @@ O que foi usado na sessão, sem ficar no repositório:
   arquivos em `.claude/agents/`.
 
 E a documentação: [`docs/EVALS.md`](docs/EVALS.md) com metodologia, resultados e o que cada rodada
-encontrou; [`docs/DECISOES.md`](docs/DECISOES.md) com as escolhas, as lacunas do enunciado, o que ficou de fora e o
+encontrou; [`docs/DECISOES.md`](docs/DECISOES.md) com as escolhas, as decisões de comportamento, o que ficou de fora e o
 que faria com mais tempo. O histórico do git segue a ordem real, e cada `fix:` explica no corpo o que o motivou
 (eval, revisão ou teste manual).
 

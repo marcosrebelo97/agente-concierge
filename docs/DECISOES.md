@@ -5,6 +5,18 @@ segundos; um lead errado ou um valor inventado chega ao comercial e ao hóspede.
 
 ## Escolhas
 
+### Stack
+
+| Tecnologia | Escolha | Por quê |
+|---|---|---|
+| Linguagem | TypeScript (Node 22) | Tipos no contrato e nas ferramentas; o mesmo código roda na Vercel e no Docker |
+| HTTP | Hono | Leve; roda igual no Node e na Vercel |
+| Validação | Zod | Entrada do `/chat` e das ferramentas validada antes de agir |
+| Modelo | Claude Sonnet 5.5, SDK oficial, loop próprio | Margem diante de conversas imprevistas; trocável por `MODELO` |
+| Sessões | Upstash Redis, na mesma região da função | Sessão e lock compartilhados entre instâncias serverless |
+| Hospedagem | Vercel (Docker como alternativa) | URL pública dentro dos 60 s; deploy a cada push na `main` |
+| Testes | Vitest e evals próprios | 290 testes sem rede; 61 casos com o modelo real |
+
 ### Arquitetura
 
 - **O modelo conversa; o código decide.** Preço, datas, capacidade, confirmação e envio do lead ficam em código
@@ -13,10 +25,8 @@ segundos; um lead errado ou um valor inventado chega ao comercial e ao hóspede.
   histórico válido, prompt caching, travas do lead); com o código explícito, cada uma tem teste.
 - **`claude-sonnet-5-5`, trocável por `MODELO`.** Resultado equivalente ao Haiku nos evals (114/116 e 115/116), com
   mais margem diante de conversas imprevistas por cerca de US$ 0,016 a mais por conversa.
-- **Vercel com Upstash Redis, na mesma região.** URL pública com o limite de 60 s; sessão e lock no Redis, porque
-  cada requisição pode cair numa instância diferente. O Docker é a alternativa fora da Vercel.
 
-### Lacunas do enunciado
+### Decisões de comportamento
 
 **Preço**
 
