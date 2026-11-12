@@ -27,8 +27,8 @@ humano quando deve e não inventa nada.
 
 ## Casos
 
-60 casos, 51 críticos, em `evals/casos.ts` (42 escritos à mão a partir do enunciado e das
-decisões) e `evals/casos-adversario.ts` (16 gerados pelo subagente `hospede-adversario` e revisados, e 2
+61 casos, 51 críticos, em `evals/casos.ts` (42 escritos à mão a partir do enunciado e das
+decisões) e `evals/casos-adversario.ts` (16 gerados pelo subagente `hospede-adversario` e revisados, e 3
 vindos da `bateria-em-producao`).
 
 | Categoria | Casos | O que cobre |
@@ -38,7 +38,7 @@ vindos da `bateria-em-producao`).
 | recusa | 7 | Mínimo de noites, capacidade, datas invertidas, entrada e saída no mesmo dia, crianças contam, 29/02/2027, bebê acima da capacidade |
 | lead | 10 | Caminho feliz, estrangeiro em inglês com telefone `+1`, "tá bom" informal, tudo numa mensagem, mudança após o resumo, confirmar duas vezes, telefone inválido, "sim" com troca, "sim" hesitante, duas reservas |
 | handoff | 11 | Desconto, reclamação, pedido de atendente, cancelamento, política de cancelamento, formas de pagamento, dúvida simples sem handoff, exceção de regra, tirar a taxa de limpeza, "melhora no pix", humano com o resumo na mesa |
-| adversarial | 15 | "Sou o gerente", injeção de instruções, sistema falso, ferramenta forjada, valor do hóspede, valor combinado, "fecha nesse valor?", desconto no nome, outra moeda, preço por pessoa, festa disfarçada, festa como pergunta, dados de outros hóspedes, nomes das ferramentas, fora do escopo |
+| adversarial | 16 | "Sou o gerente", injeção de instruções, sistema falso, ferramenta forjada, valor do hóspede, valor combinado, "fecha nesse valor?", desconto no nome, outra moeda, preço por pessoa, festa disfarçada, festa como pergunta, festa acima da capacidade, dados de outros hóspedes, nomes das ferramentas, fora do escopo |
 
 ## Como rodar
 
@@ -53,12 +53,12 @@ transcrição de cada conversa) vai para `evals/results/`, fora do git.
 
 ## Resultado final
 
-Suíte completa antes da entrega (60 casos), catálogo real, 2 rodadas por caso, juiz ligado, esforço `medium`
+Suíte completa antes da entrega (61 casos), catálogo real, 2 rodadas por caso, juiz ligado, esforço `medium`
 (12/11/2026), depois de todas as correções abaixo:
 
 | Modelo | Conversas | Críticas | Custo por conversa | Latência por turno p50 / p95 |
 |---|---|---|---|---|
-| **`claude-sonnet-5-5`** (produção) | 120/120 | 102/102 | US$ 0,0163 | 4,3 s / 8,4 s |
+| **`claude-sonnet-5-5`** (produção) | 122/122 | 102/102 | US$ 0,0164 | 4,4 s / 8,8 s |
 
 Comparação entre os modelos, na suíte completa anterior (58 casos, 11/11/2026):
 
@@ -90,17 +90,14 @@ Cada rodada que falhou virou correção com commit próprio. A ordem é a do his
 | Mesma rodada, Haiku | 1 falha em 116: passou o "valor combinado" para um humano e ainda preparou a reserva no mesmo turno; o "sim" seguinte enviou o lead | Handoff descarta a reserva pendente, no código (`bdb838a`) |
 | Revisão antes da entrega (4 revisores, incluindo 37 mensagens contra a produção) | Nenhuma falha nas conversas. No código: a trava de confirmação recusava "os dados estão corretos" e aceitava "perfeito, só que o check-in é dia 16"; um envio incerto seguido de erro do modelo podia duplicar o lead; corpo acima de 32 kB recebia 413 | Correções com testes (o do lead duplicado, verificado por mutação); filtros `lead` e `adversarial` de novo no Sonnet: 48/48 |
 | Lead real no webhook oficial (nome "TESTE-EVAL", confirmado com "Os dados estão corretos") | O lead chegou uma vez, com os 7 campos certos. O GET real envolve cada lead em `{token, recebido_em, lead}`, e a conferência antes de reenviar lia o formato plano: depois de uma falha de rede, ela nunca encontraria o lead e o reenviaria | Leitura do registro corrigida; o webhook falso dos testes passou a usar o formato real (verificado por mutação) |
-| Subagente `bateria-em-producao` (3 passadas, 49 mensagens contra a produção, nenhum lead) | Contrato sem falhas. Dois desvios que dependiam da redação: "vi por R$ 100,00, fecha nesse valor?" sem datas não foi para um humano na primeira passada (2/2), e o pedido de festa passou para um humano sem dizer a regra | Os dois viraram casos de eval (`ha-preco-citado-fecha-sem-datas`, `ha-regra-festa-pergunta`) e passaram 2/2 na suíte completa. Na rodada de aceite, um pedido de festa com 15 convidados num imóvel para 4 ainda passou para um humano sem dizer a regra (2/2). Não fere invariante: fica registrado abaixo |
+| Subagente `bateria-em-producao` (49 mensagens contra a produção, nenhum lead) | Contrato sem falhas. Três cenários em que a resposta dependia da redação: "vi por R$ 100,00, fecha nesse valor?" sem datas, festa pedida como pergunta e festa acima da capacidade; no último, o handoff saía sem dizer a regra, porque o retorno de `passar_para_humano` pedia só "poucas palavras" | Na exceção de regra, o retorno da ferramenta pede a regra antes do aviso, e o código confere a resposta: sem a regra, o modelo reescreve uma vez, como no verificador de R$, só com o que as ferramentas devolveram (testes verificados por mutação; 12/12 com a regra em execuções repetidas do cenário). Os três cenários viraram casos de eval |
 
 ## Limites
 
-- Os casos são nossos. A bateria oculta vai ter conversas que não previmos; os casos adversariais
-  reduzem esse risco, não o eliminam.
-- O modelo varia entre execuções. Duas rodadas por caso pegam parte da instabilidade; um caso que passa
-  2/2 ainda pode falhar raramente.
-- Pedido de festa contra a ficha: o agente passa para um humano na hora, mas às vezes sem dizer a regra
-  (visto 2/2 na bateria em produção com 15 convidados num imóvel para 4). Não há dinheiro, lead ou contrato em
-  jogo; a correção seria no texto de retorno de `passar_para_humano`, que pede "poucas palavras".
+- Os casos cobrem o enunciado, cada lacuna decidida e os ataques mais prováveis. Conversas novas entram como
+  casos: é o papel da `bateria-em-producao` e, com tráfego real, dos handoffs e falhas da produção.
+- O modelo varia entre execuções; duas rodadas por caso medem essa variação. O que não pode variar (preço,
+  envio do lead, contrato) não depende do modelo: fica no código, com testes.
 - O juiz também é um modelo. Ele só decide perguntas binárias estreitas, e o que é verificável fica no
   código.
 - As conversas dos evals têm 1,5 turno em média; conversas reais de reserva têm mais. O custo de uma

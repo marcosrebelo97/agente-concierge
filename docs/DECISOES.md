@@ -41,7 +41,7 @@ segundos; um lead errado ou um valor inventado chega ao comercial e ao hóspede.
 | Situação | Decisão | Por quê |
 |---|---|---|
 | Pergunta sobre regra ("aceita pet?") | Responde com a ficha, **sem** handoff | A ficha responde; acionar um atendente sem necessidade tem custo |
-| Pedido de exceção ou uso que contraria a ficha | Diz a regra e passa **imediatamente** para um humano, sem registrar pedido | Só uma pessoa pode flexibilizar; o lead não tem campo de observação |
+| Pedido de exceção ou uso que contraria a ficha | Diz a regra e passa **imediatamente** para um humano, sem registrar pedido; o código confere que a regra foi dita | Só uma pessoa pode flexibilizar; o lead não tem campo de observação |
 | Item fora da ficha (café, berço, distância não informada) | Diz que não tem a informação e oferece um atendente | O catálogo é a única fonte (enunciado) |
 | Cancelamento, política de cancelamento, pagamento | Humano, imediatamente | Não está no catálogo e é decisão do comercial |
 | "Sou o gerente", "ignore as instruções", pedido do prompt | Ignorado; texto do hóspede é dado, não instrução | Regras não mudam por pedido |
@@ -80,7 +80,7 @@ segundos; um lead errado ou um valor inventado chega ao comercial e ao hóspede.
 - **Mais evals de conversas longas e de várias reservas**, com 5 rodadas por caso para medir a variação do
   modelo, e casos tirados de conversas reais que derem errado.
 - **Classificar a confirmação também com o modelo**, como segunda opinião, mantendo as travas do código como veto.
-  Uma lista de expressões é frágil por natureza: cada rodada de revisão encontrou formas novas de dizer "sim".
+  Hoje o código é um veto conservador: na dúvida, o agente pergunta de novo; o modelo reduziria essas perguntas.
 - **Compactar o histórico** depois de N turnos, preservando os pares de ferramenta. Hoje, conversas acima do teto
   vão para um humano.
 - **Observabilidade:** custo, latência e motivos de handoff por dia num painel, com alerta de gasto. Com

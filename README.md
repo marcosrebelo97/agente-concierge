@@ -106,6 +106,7 @@ flowchart TD
 | Nenhum valor sai sem conferência: valor não cotado, fora do formato `R$ 1.234,56` ou em outra moeda volta ao modelo uma vez; na segunda, a resposta é trocada por uma segura | `src/agent/guard.ts` |
 | Lead só com confirmação explícita depois de o hóspede ver o resumo (sem pergunta, mudança, hesitação nem negação); o resumo expira se a conversa muda de assunto ou passa a um humano; preço recotado na confirmação; `valor_total` sai da cotação | `src/agent/tools.ts`, `src/domain/lead.ts` |
 | Resumo que o hóspede não viu (prazo, erro, recusa, verificador) é descartado | `src/agent/loop.ts` |
+| Exceção de regra (festa, pet, fumar, capacidade): a resposta do handoff que não diz a regra da ficha volta ao modelo uma vez, só com o que as ferramentas devolveram | `src/agent/loop.ts`, `src/agent/tools.ts` |
 | Um lead por reserva, mesmo com queda no meio: estado gravado antes e depois do envio; uma nova tentativa, mesmo com a reserva preparada de novo, confere o webhook antes | `src/agent/tools.ts`, `src/infra/webhook.ts` |
 | Duas mensagens simultâneas da mesma sessão não viram dois leads | `src/infra/session.ts` |
 | Resposta vazia, cortada ou recusada do modelo não entra no histórico; a sessão nunca fica presa num erro | `src/agent/loop.ts` |
@@ -117,7 +118,7 @@ capacidade, confirmação, falhas) estão em [`docs/DECISOES.md`](docs/DECISOES.
 ## Custo por conversa
 
 Medido com o `usage` de cada chamada nos evals (suíte de 11/11, 58 casos × 2 rodadas, catálogo real; a suíte
-final de 60 casos deu US$ 0,0163 por conversa no Sonnet), com os preços
+final de 61 casos deu US$ 0,0164 por conversa no Sonnet), com os preços
 oficiais por milhão de tokens: Sonnet 5.5 US$ 2 entrada, US$ 10 saída, US$ 0,10 leitura de cache;
 Haiku 5.5 US$ 0,10, US$ 0,50 e US$ 0,01; escrita de cache a 1,25× a entrada.
 
