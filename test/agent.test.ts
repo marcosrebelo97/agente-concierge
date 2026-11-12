@@ -1,7 +1,8 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
-import { createAgent, RESPOSTA_CONTINGENCIA } from '../src/agent/loop.js';
+import { citaRegra, createAgent, RESPOSTA_CONTINGENCIA } from '../src/agent/loop.js';
 import type { Estado } from '../src/agent/state.js';
+import { proximoPassoHandoff } from '../src/agent/tools.js';
 import { createCatalog } from '../src/infra/catalog.js';
 import { memoryStore } from '../src/infra/session.js';
 import { BASE, fakeCatalog } from './support/fake-catalog.js';
@@ -141,6 +142,99 @@ describe('loop do agente', () => {
 });
 
 describe('passar para humano', () => {
+  // Achado da bateria em produção: festa acima da capacidade passava para o atendente sem dizer a regra.
+  it('na exceção de regra, orienta a dizer a regra da ficha antes do aviso de atendente', () => {
+    const passo = proximoPassoHandoff('excecao_a_regra');
+    expect(passo).toMatch(/^Primeiro diga .* o que a ficha/);
+    expect(passo.indexOf('ficha')).toBeLessThan(passo.indexOf('atendente'));
+    expect(passo).not.toMatch(/poucas palavras/);
+  });
+
+  const FICHA = { ferramentas: [{ nome: 'ver_imovel', entrada: { imovel_id: 'GRM-301' } }] };
+  const EXCECAO = { ferramentas: [{ nome: 'passar_para_humano', entrada: { motivo: 'excecao_a_regra', resumo: 'festa' } }] };
+  const SEM_REGRA = { texto: 'Já passei seu pedido para um atendente.' };
+  const COM_REGRA = { texto: 'Pela ficha, festas não são permitidas. Um atendente vai avaliar o pedido.' };
+
+  it('exceção de regra sem a regra na resposta: o código pede uma reescrita', async () => {
+    const { agent, fake } = setup([FICHA, EXCECAO, SEM_REGRA, COM_REGRA]);
+    const r = await agent.responder('s1', 'quero fazer uma festa com 15 amigos no GRM-301');
+    expect(r.reply).toBe(COM_REGRA.texto);
+    expect(r.handoff).toBe(true);
+    expect(fake.chamadas).toBe(4);
+    expect(JSON.stringify(fake.recebidos[3]!.messages.at(-1))).toMatch(/não diz o que a ficha diz sobre a regra/);
+  });
+
+  it('exceção de regra com a regra na resposta: sem reescrita', async () => {
+    const { agent, fake } = setup([FICHA, EXCECAO, COM_REGRA]);
+    expect((await agent.responder('s1', 'quero fazer uma festa')).handoff).toBe(true);
+    expect(fake.chamadas).toBe(3);
+  });
+
+  it('a reescrita é pedida uma vez só', async () => {
+    const { agent, fake } = setup([FICHA, EXCECAO, SEM_REGRA, { texto: 'Um atendente vai continuar.' }]);
+    expect((await agent.responder('s1', 'quero fazer uma festa')).reply).toBe('Um atendente vai continuar.');
+    expect(fake.chamadas).toBe(4);
+  });
+
+  // Sem ficha consultada, cobrar a regra empurraria o modelo a inventar uma (invariante 2).
+  it('sem ficha consultada no turno, não cobra a regra', async () => {
+    const { agent, fake } = setup([EXCECAO, SEM_REGRA]);
+    await agent.responder('s1', 'aceitam festa em algum imóvel? quero falar com alguém');
+    expect(fake.chamadas).toBe(2);
+  });
+
+  it('sem tempo no turno, fica a resposta que já existe', async () => {
+    const { agent, fake } = setup([FICHA, EXCECAO, SEM_REGRA, COM_REGRA]);
+    const r = await agent.responder('s1', 'quero fazer uma festa', Date.now() + 8_000);
+    expect(r.reply).toBe(SEM_REGRA.texto);
+    expect(fake.chamadas).toBe(3);
+  });
+
+  it('chamada de exceção recusada na validação não conta: handoff por outro motivo não cobra regra', async () => {
+    const { agent, fake } = setup([
+      FICHA,
+      { ferramentas: [{ nome: 'passar_para_humano', entrada: { motivo: 'excecao_a_regra', resumo: 'x'.repeat(600) } }] },
+      { ferramentas: [{ nome: 'passar_para_humano', entrada: { motivo: 'reclamacao', resumo: 'x' } }] },
+      SEM_REGRA,
+    ]);
+    expect((await agent.responder('s1', 'péssimo, quero falar com alguém')).reply).toBe(SEM_REGRA.texto);
+    expect(fake.chamadas).toBe(4);
+  });
+
+  it('outros motivos de handoff não cobram regra', async () => {
+    const { agent, fake } = setup([
+      FICHA,
+      { ferramentas: [{ nome: 'passar_para_humano', entrada: { motivo: 'reclamacao', resumo: 'x' } }] },
+      SEM_REGRA,
+    ]);
+    await agent.responder('s1', 'péssimo atendimento');
+    expect(fake.chamadas).toBe(3);
+  });
+
+  it.each([
+    'Pela ficha, festas não são permitidas.',
+    'O chalé comporta até 4 pessoas.',
+    'Pets não são aceitos e a capacidade máxima é de 4 hóspedes.',
+    'O imóvel não aceita pets.',
+    'Recebe no máximo quatro hóspedes.',
+    'Acomoda até 4 hóspedes.',
+    "Parties aren't allowed there; it doesn't allow pets.",
+    'The cabin sleeps up to 4 guests.',
+    'No se aceptan mascotas.',
+  ])('reconhece a regra enunciada: %s', (t) => expect(citaRegra(t)).toBe(true));
+
+  it.each([
+    'Já passei seu pedido para um atendente.',
+    'Passei seu pedido para um atendente, que vai analisar a ficha e a capacidade do imóvel.',
+    'O check-out é até as 12:00. Um atendente vai continuar.',
+  ])('não confunde aviso de atendente com regra: %s', (t) => expect(citaRegra(t)).toBe(false));
+
+  it('nos outros motivos, só avisa que um atendente vai continuar', () => {
+    for (const motivo of ['reclamacao', 'desconto_ou_negociacao', 'pedido_de_atendente', 'fora_do_alcance'] as const) {
+      expect(proximoPassoHandoff(motivo)).toMatch(/^Diga ao hóspede, em poucas palavras/);
+    }
+  });
+
   it('liga handoff na resposta do turno e marca a sessão', async () => {
     const { agent, store } = setup([
       { ferramentas: [{ nome: 'passar_para_humano', entrada: { motivo: 'desconto_ou_negociacao', resumo: 'quer 30%' } }] },

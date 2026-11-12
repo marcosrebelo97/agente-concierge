@@ -6,7 +6,7 @@ import type { SessionStore } from '../infra/session.js';
 import { instrucaoCorrecao, verificarValores } from './guard.js';
 import { SYSTEM_PROMPT } from './prompt.js';
 import { estadoInicial, type Estado } from './state.js';
-import { definicoes, executarFerramenta, type Contexto, type Resultado } from './tools.js';
+import { definicoes, executarFerramenta, ORIENTACAO_REGRA, type Contexto, type Resultado } from './tools.js';
 import type { Webhook } from '../infra/webhook.js';
 
 // Loop do agente, escrito à mão: o código decide quando parar, o que vai para o histórico e o que
@@ -66,6 +66,28 @@ export const RESPOSTA_REGISTRADO =
 export const RESPOSTA_CONVERSA_LONGA =
   'Esta conversa ficou longa demais para eu continuar com segurança. Vou passar para um atendente da nossa ' +
   'equipe, que continua o atendimento por aqui.';
+
+// Exceção de regra: a resposta precisa dizer o que a ficha diz. A orientação da ferramenta resolve na maioria
+// das vezes; quando o modelo só avisa do atendente, o código pede uma reescrita, como faz o verificador de R$.
+// O teste é por regra enunciada (negação ou limite com número), não por palavra solta como "ficha".
+const NUMERO = '(\\d+|duas|dois|tr[êe]s|quatro|cinco|seis|sete|oito|nove|dez|two|three|four|five|six|eight|ten)';
+const REGRA_ENUNCIADA = new RegExp(
+  [
+    'n[ãa]o (permite|aceita|admite)', 'n[ãa]o (é|s[ãa]o) (permitid|aceit)', 'proibid', 'vedad',
+    `(capacidade|comporta|acomoda|m[áa]xim[oa])[^.\\n]{0,30}\\b${NUMERO}\\b`,
+    `\\bat[ée] ${NUMERO} (h[óo]spedes|pessoas)`,
+    'not (allowed|permitted|accepted)', "(doesn'?t|does not|don'?t|do not) (allow|accept|permit)",
+    `(up to|maximum|max\\.?|capacity)[^.\\n]{0,20}\\b${NUMERO}\\b`,
+    'no (se )?(permite|aceptan?|admite)', 'no (est[áa]n?|son) permitid', `capacidad[^.\\n]{0,30}\\b${NUMERO}\\b`,
+  ].join('|'),
+  'iu',
+);
+export const citaRegra = (texto: string): boolean => REGRA_ENUNCIADA.test(texto);
+const INSTRUCAO_REGRA =
+  `Sua última resposta não foi enviada ao hóspede: ela não diz o que a ficha diz sobre a regra. ${ORIENTACAO_REGRA} ` +
+  'Nunca afirme uma regra que as ferramentas não devolveram. Não comente esta verificação nem diga que está ' +
+  'reescrevendo.';
+const REESCRITA_MIN_MS = 12_000; // sem esse tempo no turno, fica a resposta que já existe
 
 const PRAZO_MS = 50_000;
 const MAX_ITERACOES = 8;
@@ -162,6 +184,8 @@ export function createAgent(deps: AgentDeps) {
     let handoff = false;
     let reply: string | null = null;
     let corrigiu = false;
+    let excecaoDeRegra = false;
+    let cobrouRegra = false;
     let mostrouTextoDoModelo = false;
     const usadas = new Set<string>();
     const signal = AbortSignal.timeout(Math.max(prazo - Date.now(), 0));
@@ -234,6 +258,7 @@ export function createAgent(deps: AgentDeps) {
             handoff = true;
             estado.humanoAcionado = true;
           }
+          if (resultados.some((r) => r.regraDaFicha)) excecaoDeRegra = true;
           continue;
         }
 
@@ -263,6 +288,14 @@ export function createAgent(deps: AgentDeps) {
           // Se havia um resumo de reserva neste turno, o hóspede precisa saber que nada foi registrado.
           reply = fixa(estado.pendente?.turno === estado.turno ? RESPOSTA_RESERVA_DESCARTADA : RESPOSTA_SEM_VALOR);
           break;
+        }
+        const fichaNoTurno = usadas.has('ver_imovel') || usadas.has('buscar_imoveis');
+        const temTempo = prazo - Date.now() > REESCRITA_MIN_MS;
+        if (excecaoDeRegra && handoff && fichaNoTurno && temTempo && !cobrouRegra && !citaRegra(textoModelo)) {
+          cobrouRegra = true;
+          console.log(JSON.stringify({ evento: 'regra_ausente', turno: estado.turno }));
+          estado.mensagens.push({ role: 'user', content: `${AVISO_VERIFICADOR} ${INSTRUCAO_REGRA}` });
+          continue;
         }
         mostrouTextoDoModelo = true;
         reply = textoModelo;

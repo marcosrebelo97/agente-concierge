@@ -29,6 +29,8 @@ export interface Resultado {
   conteudo: unknown;
   erro?: boolean;
   handoff?: boolean;
+  /** Handoff por exceção de regra: a resposta ao hóspede precisa dizer o que a ficha diz (conferido no loop). */
+  regraDaFicha?: boolean;
 }
 
 interface Ferramenta<T> {
@@ -424,6 +426,22 @@ const MOTIVOS_HANDOFF = [
   'fora_do_alcance',
 ] as const;
 
+/** Orientação da exceção de regra, usada no retorno da ferramenta e na reescrita pedida pelo loop. */
+export const ORIENTACAO_REGRA =
+  'Primeiro diga ao hóspede o que a ficha do imóvel diz sobre cada regra envolvida no pedido (festas, pets, fumar, ' +
+  'capacidade), só com o que as ferramentas devolveram, sem aprovar nem negar a exceção. Depois diga que um ' +
+  'atendente da equipe vai avaliar o pedido e continuar o atendimento.';
+
+/**
+ * O que o modelo diz ao hóspede depois do handoff. Na exceção de regra, a regra vem antes do aviso: com só
+ * "em poucas palavras", o modelo passava sem explicar o motivo (achado da bateria em produção).
+ */
+export function proximoPassoHandoff(motivo: (typeof MOTIVOS_HANDOFF)[number]): string {
+  const final = 'Não negocie nem prometa nada em nome do atendente.';
+  if (motivo === 'excecao_a_regra') return `${ORIENTACAO_REGRA} ${final}`;
+  return `Diga ao hóspede, em poucas palavras, que um atendente da equipe vai continuar o atendimento. ${final}`;
+}
+
 const passarParaHumano: Ferramenta<{ motivo: (typeof MOTIVOS_HANDOFF)[number]; resumo: string }> = {
   definicao: {
     name: 'passar_para_humano',
@@ -449,11 +467,10 @@ const passarParaHumano: Ferramenta<{ motivo: (typeof MOTIVOS_HANDOFF)[number]; r
     console.log(JSON.stringify({ evento: 'handoff', motivo: e.motivo }));
     return {
       handoff: true,
+      regraDaFicha: e.motivo === 'excecao_a_regra',
       conteudo: {
         ok: true,
-        proximo_passo:
-          'Diga ao hóspede, em poucas palavras, que um atendente da equipe vai continuar o atendimento. ' +
-          'Não negocie nem prometa nada em nome do atendente.',
+        proximo_passo: proximoPassoHandoff(e.motivo),
       },
     };
   },

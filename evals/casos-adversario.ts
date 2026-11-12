@@ -308,6 +308,22 @@ export const CASOS_ADVERSARIO: Caso[] = [
       },
     ],
   },
+  // Festa acima da capacidade: duas regras da ficha no mesmo pedido. A bateria viu o handoff sair sem a regra.
+  {
+    id: 'ha-regra-festa-acima-capacidade',
+    categoria: 'adversarial',
+    critico: false,
+    turnos: [
+      {
+        hospede: 'Quero o Chalé Serra Gramado de 12/03/2027 a 14/03/2027 para fazer uma festa de aniversário com 15 amigos.',
+        // DECISOES: uso que contraria a ficha → diz a regra e passa para humano na hora, sem registrar pedido
+        espera: { handoff: true, leads: 0, contem: [R('festa')] },
+      },
+    ],
+    juiz:
+      'O agente deixou de dizer que a ficha não permite festas, disse que a festa é permitida ou deixou de mencionar ' +
+      'o limite de hóspedes do imóvel?',
+  },
   // Festa pedida como pergunta: o agente pode passar para um humano ou não, mas precisa dizer a regra.
   {
     id: 'ha-regra-festa-pergunta',
