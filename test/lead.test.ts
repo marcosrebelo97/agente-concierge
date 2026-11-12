@@ -110,4 +110,23 @@ describe('confirmação do hóspede', () => {
       expect(confirmaReserva(m), m).toBe(false);
     }
   });
+
+  // Frases achadas na revisão de 12/11: confirmações comuns eram recusadas, e afirmações seguidas de mudança,
+  // desistência ou pergunta sem "?" eram aceitas.
+  it('reconhece confirmação no plural, "prossiga" e "pode fazer a reserva"', () => {
+    for (const m of ['Os dados estão corretos', 'Dados corretos, pode prosseguir com a reserva', 'Prossiga',
+      'Isso, pode fazer a reserva', 'Está tudo certo, pode registrar, não precisa mudar nada',
+      'As informações estão certas', 'Tudo correto, não tenho mais perguntas']) {
+      expect(confirmaReserva(m), m).toBe(true);
+    }
+  });
+
+  it('não confirma afirmação seguida de mudança, desistência, consulta a outra pessoa ou pergunta sem "?"', () => {
+    for (const m of ['perfeito, só que o check-in é dia 16', 'fechado. Ah, somos 5 agora',
+      'certo, vou conversar com minha esposa primeiro', 'ok, deixa pra lá', 'beleza, vou fechar com outra empresa',
+      'certo, obrigado, desisti', 'nada disso, ok', 'ótimo, e o estacionamento', 'certo, quanto fica com 3 pessoas',
+      'ok, em vez de 2 serão 3 hóspedes']) {
+      expect(confirmaReserva(m), m).toBe(false);
+    }
+  });
 });

@@ -54,7 +54,7 @@ export function validarNome(entrada: string): Validacao<string> {
   return { ok: true, valor: nome };
 }
 
-/** Identidade da reserva: mesmos dados, mesmo hash, independente da ordem das chaves. */
+/** Identidade da reserva: mesmos dados, mesmo hash, independentemente da ordem das chaves. */
 export function hashReserva(lead: Lead): string {
   const canon = JSON.stringify([
     lead.nome.toLowerCase(),
@@ -76,12 +76,14 @@ function palavras(termos: string[]): RegExp {
 // Afirmações que não deixam dúvida em resposta a "posso registrar?". Inclui inglês e espanhol: o agente
 // responde no idioma do hóspede.
 const AFIRMATIVO = palavras([
-  'sim', 's', 'isso mesmo', 'isso aí', 'isso ai', 'exato', 'exatamente', 'correto', 'certo', 'certinho', 'perfeito',
-  'claro', 'ok', 'okay', 'blz', 'beleza', 'show', 'fechado', 'fechou', 'fecha', 'combinado', 'positivo', 'confirmo',
-  'confirmado', 'confirmada', 'confirma', 'confere', 'tá bom', 'ta bom', 'tá certo', 'ta certo', 'ótimo', 'otimo',
-  'aham', 'uhum', 'com certeza', 'tudo certo', 'bora', 'registra', 'registre', 'reserve', 'pode registrar',
-  'pode confirmar', 'pode enviar', 'pode mandar', 'pode fechar', 'pode seguir', 'pode reservar', 'quero fechar',
-  'quero reservar', 'manda ver', 'yes', 'yep', 'sure', 'confirmed', 'go ahead', 'sí', 'si', 'dale', 'de acuerdo',
+  'sim', 's', 'isso mesmo', 'isso aí', 'isso ai', 'exato', 'exatamente', 'correto', 'corretos', 'correta',
+  'corretas', 'certo', 'certos', 'certa', 'certas', 'certinho', 'perfeito', 'claro', 'ok', 'okay', 'blz', 'beleza',
+  'show', 'fechado', 'fechou', 'fecha', 'combinado', 'positivo', 'confirmo', 'confirmado', 'confirmada', 'confirma',
+  'confere', 'tá bom', 'ta bom', 'tá certo', 'ta certo', 'ótimo', 'otimo', 'aham', 'uhum', 'com certeza',
+  'tudo certo', 'bora', 'registra', 'registre', 'reserve', 'prossiga', 'pode prosseguir', 'pode continuar',
+  'pode registrar', 'pode confirmar', 'pode enviar', 'pode mandar', 'pode fechar', 'pode seguir', 'pode reservar',
+  'pode fazer a reserva', 'pode fazer o pedido', 'quero fechar', 'quero reservar', 'manda ver', 'yes', 'yep', 'sure',
+  'confirmed', 'go ahead', 'sí', 'si', 'dale', 'de acuerdo',
 ]);
 // Palavras que confirmam sozinhas ("Pode!", "Manda."), mas numa frase maior pedem outra coisa
 // ("pode me dizer o horário", "manda o endereço", "isso inclui toalhas").
@@ -90,8 +92,23 @@ const EMOJI_AFIRMATIVO = /👍|✅/u;
 const MUDANCA = palavras([
   'mas', 'porém', 'muda', 'mudar', 'mude', 'troca', 'trocar', 'troque', 'altera', 'alterar', 'altere', 'corrige',
   'corrigir', 'corrija', 'espera', 'espere', 'aguarda', 'aguarde', 'errado', 'errada', 'na verdade', 'cancela',
-  'cancelar', 'desisto', 'but', 'wait', 'change', 'pero', 'cambiar',
+  'cancelar', 'desisto', 'desisti', 'desistir', 'só que', 'so que', 'em vez', 'ao invés', 'ao inves', 'somos',
+  'seremos', 'vamos ser', 'deixa pra lá', 'deixa pra la', 'deixa para lá', 'deixa para la', 'esquece', 'esqueça',
+  'nada disso', 'outra empresa', 'outro lugar', 'outra opção', 'outra opcao', 'but', 'wait', 'change', 'pero',
+  'cambiar',
 ]);
+// Pergunta sem "?" no começo de uma oração ("ótimo, e o estacionamento").
+const PERGUNTA = /(^|[,.;!]\s*)(e (o|a|os|as)|qual|quais|quanto|quanta|quando|onde|tem|aceita)([^\p{L}]|$)/iu;
+// Negações que não recusam nada; saem antes da análise para não barrar "pode registrar, não precisa mudar nada".
+const NEGACAO_NEUTRA = new RegExp(
+  [
+    'não (precisa|há|tem) (mais )?(nada (a|para|pra) )?(mudar|alterar|corrigir|nada)( nada)?',
+    'nada (a|para|pra) (mudar|alterar|corrigir)',
+    'não tenho (mais )?(dúvidas|perguntas)',
+    'sem (mudanças|alterações)',
+  ].join('|'),
+  'giu',
+);
 const NEGACAO_INICIAL = /^\s*(não|nao|nope|negativo|no|not)([^\p{L}]|$)/iu;
 // "Não" no meio só passa depois de um sim inequívoco no começo ("sim, não tenho mais dúvidas");
 // sem isso, "isso não está certo" seria lido como "isso".
@@ -102,16 +119,18 @@ const SIM_INICIAL = /^\s*(sim|confirmo|ok|okay|yes|sí|pode registrar|pode confi
 const HESITACAO = palavras([
   'acho', 'talvez', 'pode ser', 'provavelmente', 'quem sabe', 'não sei', 'nao sei', 'vou ver', 'vou pensar',
   'deixa eu ver', 'deixa eu pensar', 'te falo', 'te aviso', 'mais tarde', 'ainda não', 'ainda nao', 'hmm', 'hum',
-  'maybe', 'quizás', 'quizas',
+  'vou conversar', 'vou falar com', 'vou consultar', 'vou checar', 'vou confirmar com', 'maybe', 'quizás', 'quizas',
 ]);
 
 /**
  * A mensagem do hóspede confirma o resumo? Precisa afirmar e não pode perguntar, pedir mudança, hesitar
  * nem negar. Na dúvida, não confirma: o agente pergunta de novo, o que é melhor que um lead errado.
  */
-export function confirmaReserva(mensagem: string): boolean {
-  if (mensagem.includes('?')) return false; // pergunta não é confirmação, mesmo com "pode" ou "isso"
+export function confirmaReserva(original: string): boolean {
+  if (original.includes('?')) return false; // pergunta não é confirmação, mesmo com "pode" ou "isso"
+  const mensagem = original.replace(NEGACAO_NEUTRA, ' ');
   if (MUDANCA.test(mensagem) || HESITACAO.test(mensagem) || NEGACAO_INICIAL.test(mensagem)) return false;
+  if (PERGUNTA.test(mensagem)) return false;
   if (NEGACAO.test(mensagem) && !SIM_INICIAL.test(mensagem)) return false;
   const curta = mensagem.trim().split(/\s+/).length <= 2;
   return AFIRMATIVO.test(mensagem) || EMOJI_AFIRMATIVO.test(mensagem) || (curta && AFIRMATIVO_CURTO.test(mensagem));
