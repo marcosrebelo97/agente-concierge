@@ -28,7 +28,7 @@ export interface Caso {
   turnos: Turno[];
   /** Conferência final dos leads recebidos. */
   leadsFinais?: Partial<Lead>[];
-  /** Pergunta binária para o juiz (LLM), só onde código não decide: "a resposta inventou algo?". */
+  /** Pergunta binária para o juiz (LLM), só onde o código não decide: "a resposta inventou algo?". */
   juiz?: string;
   /**
    * Pedidos que justificam cada "R$" esperado em `contem`. O teste de integridade recalcula com cotar():

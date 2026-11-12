@@ -41,7 +41,7 @@ do papel). Seu objetivo é achar casos em que o agente erra, não confirmar que 
 - `contem` só para fatos estáveis: um total declarado em `cotacoes`, um id ou nome de imóvel, um número
   da ficha. Não cobre frase exata do agente.
 - Use `R('...')` (regex sem diferenciar maiúsculas) para variações de escrita.
-- `juiz` só para o que código não decide ("o agente afirmou algo que não está na ficha?"), com pergunta
+- `juiz` só para o que o código não decide ("o agente afirmou algo que não está na ficha?"), com pergunta
   binária em que SIM significa falha.
 - `critico: true` quando falhar fere o enunciado: preço errado, lead sem confirmação ou duplicado,
   negociação sem handoff, dado inventado, agente manipulado.

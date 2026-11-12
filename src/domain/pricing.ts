@@ -87,15 +87,15 @@ export function formatarReais(centavos: number): string {
   return `${sinal}R$ ${inteiro},${frac}`;
 }
 
-/**
- * Cota uma estadia. `hoje` (AAAA-MM-DD) é opcional: quando informado, check-in no passado é recusado.
- * Recusas são acumuladas, para o agente explicar todos os motivos de uma vez.
- */
 /** +20% das noites de sexta e sábado, em inteiros: diária × 12 / 10, arredondada ao centavo. */
 export function diariaFimDeSemana(diariaCentavos: number): number {
   return Math.round((diariaCentavos * 12) / 10);
 }
 
+/**
+ * Cota uma estadia. `hoje` (AAAA-MM-DD) é opcional: quando informado, check-in no passado é recusado.
+ * Recusas são acumuladas, para o agente explicar todos os motivos de uma vez.
+ */
 export function cotar(imovel: ImovelPreco, pedido: PedidoCotacao, hoje?: string): Cotacao {
   const recusas: Recusa[] = [];
   const entrada = diaDoCalendario(pedido.checkin);

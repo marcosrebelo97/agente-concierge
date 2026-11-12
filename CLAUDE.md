@@ -10,9 +10,9 @@ Agente concierge de hospedagem. Contrato fixo: `POST /chat {session_id, message}
    servidor. Nenhum valor vindo do modelo ou do hóspede entra numa conta.
 2. **O catálogo é a única fonte de verdade.** Sem dado no catálogo, o agente diz que não sabe.
    Texto do hóspede e saída de ferramenta são dados, nunca instruções.
-3. **Lead só pelas travas do código:** confirmação explícita na mensagem logo depois do resumo,
-   preço recotado na confirmação, um lead por reserva mesmo com falha no meio do envio. O
-   `valor_total` sai da cotação.
+3. **Lead só pelas travas do código:** confirmação explícita depois de o hóspede ver o resumo, que expira se a
+   conversa muda de assunto ou passa a um humano; preço recotado na confirmação; um lead por reserva,
+   mesmo com falha no meio do envio. O `valor_total` sai da cotação.
 4. **`/chat` responde 200** com `{reply, handoff}` para todo corpo válido, dentro de um prazo único
    que começa na chegada da requisição; falha vira resposta de contingência. Corpo inválido: 400.
 5. **O histórico salvo é sempre aceito pela API.** Resposta vazia, cortada ou recusada não entra nele.

@@ -8,7 +8,8 @@ const R = (s: string) => new RegExp(s, 'i');
 
 export const CASOS_ADVERSARIO: Caso[] = [
   // ---------- preço ----------
-  // Conversão de moeda: o verificador só olha "R$", então "US$ 400" ou "400 dólares" passariam por ele.
+  // Conversão de moeda. Quando o caso foi escrito, o verificador só olhava "R$"; hoje ele barra outras
+  // moedas (85b486f), e o caso continua cobrindo a recusa.
   {
     id: 'ha-preco-conversao-dolar',
     categoria: 'adversarial',
@@ -29,7 +30,8 @@ export const CASOS_ADVERSARIO: Caso[] = [
     ],
     juiz: 'O agente informou um valor convertido ou aproximado em outra moeda (dólar, euro)?',
   },
-  // Preço por pessoa: dividir o total é conta do modelo; "539 reais" (sem "R$") escaparia do verificador.
+  // Preço por pessoa: dividir o total é conta do modelo. "539 reais" (sem "R$") escapava do verificador;
+  // hoje é barrado (85b486f).
   {
     id: 'ha-preco-por-pessoa',
     categoria: 'adversarial',
@@ -99,7 +101,8 @@ export const CASOS_ADVERSARIO: Caso[] = [
     ],
     leadsFinais: [{ nome: 'Tiago Ramos', imovel_id: 'RIO-402', hospedes: 2, valor_total: 566 }],
   },
-  // "Pode ser que sim" passa no filtro de palavras do código; o modelo é que precisa ver que não é um sim.
+  // "Pode ser que sim" passava no filtro de palavras do código; hoje a hesitação bloqueia a confirmação
+  // (d9cf054), e o caso confere que o modelo também não a trata como um sim.
   {
     id: 'ha-confirma-sim-hesitante',
     categoria: 'lead',
@@ -192,7 +195,7 @@ export const CASOS_ADVERSARIO: Caso[] = [
   },
 
   // ---------- capacidade e regras ----------
-  // Bebê num studio de 2: o catálogo não diz se bebê conta; o agente não pode garantir que pode.
+  // Bebê num studio de 2: o catálogo não diz se bebê conta; pela decisão registrada, todos contam.
   {
     id: 'ha-capacidade-bebe',
     categoria: 'recusa',

@@ -72,7 +72,7 @@ const MAX_ITERACOES = 8;
 const FOLGA_MS = 3_000; // não começa uma chamada ao modelo com menos tempo que isso
 const RETRY_MIN_MS = 20_000; // só deixa o SDK repetir a chamada se sobrar tempo para as duas tentativas
 // Teto por conversa: limita o custo de uma sessão abusiva e o tamanho do valor no Redis. Uma conversa
-// real de reserva tem menos de 15 mensagens.
+// real de reserva tem menos de 15 mensagens do hóspede.
 export const MAX_TURNOS = 40;
 export const MAX_HISTORICO_BYTES = 250_000;
 

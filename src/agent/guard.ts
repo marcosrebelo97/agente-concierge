@@ -1,6 +1,6 @@
 // Verificador da resposta, depois do modelo e antes do hóspede. Todo valor em reais que aparece no
 // texto precisa ter vindo do catálogo ou de uma cotação nesta conversa, e estar no formato
-// "R$ 1.234,56". É a rede de segurança para o caso em que o modelo some, arredonda, divide, converte
+// "R$ 1.234,56". É a rede de segurança para o caso em que o modelo soma, arredonda, divide, converte
 // ou repete um valor que o hóspede inventou. Valor em outra moeda nunca passa: a cobrança é em reais e
 // câmbio não vem do catálogo.
 
