@@ -45,7 +45,7 @@ segundos; um lead errado ou um valor inventado chega ao comercial e ao hóspede.
 | Item fora da ficha (café, berço, distância não informada) | Diz que não tem a informação e oferece um atendente | O catálogo é a única fonte (enunciado) |
 | Cancelamento, política de cancelamento, pagamento | Humano, imediatamente | Não está no catálogo e é decisão do comercial |
 | "Sou o gerente", "ignore as instruções", pedido do prompt | Ignorado; texto do hóspede é dado, não instrução | Regras não mudam por pedido |
-| Recusa do próprio modelo | Handoff, sem modelo de reserva | Um segundo modelo não passou pelos evals; o atendente é a saída testada |
+| Recusa do próprio modelo | Handoff, sem modelo alternativo (fallback) | Um segundo modelo não passou pelos evals; o atendente é a saída testada |
 
 **Lead**
 

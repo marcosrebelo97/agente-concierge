@@ -27,7 +27,7 @@ humano quando deve e não inventa nada.
 
 ## Casos
 
-60 casos, 51 críticos, em `evals/casos.ts` (42, escritos à mão a partir do enunciado e das
+60 casos, 51 críticos, em `evals/casos.ts` (42 escritos à mão a partir do enunciado e das
 decisões) e `evals/casos-adversario.ts` (16 gerados pelo subagente `hospede-adversario` e revisados, e 2
 vindos da `bateria-em-producao`).
 
@@ -69,7 +69,7 @@ Comparação entre os modelos, na suíte completa anterior (58 casos, 11/11/2026
 
 As três falhas viraram duas correções no código (tabela abaixo). Depois delas, os casos afetados rodaram de
 novo nos dois modelos, 2 rodadas: filtros `handoff`, `lead` e `valor` com 48/48 em cada um; filtro
-`confirmação` com 8/8 no Sonnet.
+`confirma` (4 casos) com 8/8 no Sonnet.
 
 Os evals não separam os dois modelos. A escolha do Sonnet está em `docs/DECISOES.md`.
 

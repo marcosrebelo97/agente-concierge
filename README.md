@@ -37,7 +37,7 @@ POST /chat
 
 ## Como rodar
 
-Requer Node 22 ou mais novo.
+Requer Node 22.9 ou mais novo.
 
 ```bash
 cp .env.example .env    # preencha ANTHROPIC_API_KEY e SEAZONE_TOKEN
@@ -116,14 +116,14 @@ capacidade, confirmação, falhas) estão em [`docs/DECISOES.md`](docs/DECISOES.
 
 ## Custo por conversa
 
-Medido com o `usage` de cada chamada nos evals (58 casos × 2 rodadas, catálogo real), com os preços
+Medido com o `usage` de cada chamada nos evals (suíte de 11/11, 58 casos × 2 rodadas, catálogo real; a suíte
+final de 60 casos deu US$ 0,0163 por conversa no Sonnet), com os preços
 oficiais por milhão de tokens: Sonnet 5.5 US$ 2 entrada, US$ 10 saída, US$ 0,10 leitura de cache;
 Haiku 5.5 US$ 0,10, US$ 0,50 e US$ 0,01; escrita de cache a 1,25× a entrada.
 
 | | **Sonnet 5.5** (produção) | Haiku 5.5 |
 |---|---|---|
 | Conversa média dos evals (1,5 turno) | **US$ 0,017** | US$ 0,001 |
-| Por turno | US$ 0,012 | US$ 0,0007 |
 | Reserva completa: cotação, dados, resumo e confirmação (4 turnos, 8 chamadas) | **US$ 0,018** | US$ 0,0014 |
 | Conversas de 4 turnos, média | US$ 0,025 | US$ 0,0016 |
 
