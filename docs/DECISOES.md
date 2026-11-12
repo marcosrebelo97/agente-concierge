@@ -52,6 +52,7 @@ segundos; um lead errado ou um valor inventado chega ao comercial e ao hóspede.
 |---|---|---|
 | Pergunta sobre regra ("aceita pet?") | Responde com a ficha, **sem** handoff | A ficha responde; acionar um atendente sem necessidade tem custo |
 | Pedido de exceção ou uso que contraria a ficha | Diz a regra e passa **imediatamente** para um humano, sem registrar pedido; o código confere que a regra foi dita | Só uma pessoa pode flexibilizar; o lead não tem campo de observação |
+| Insistência na exceção depois do handoff ("a gente se aperta, não dá pra liberar?") | Repete a regra, **sem** novo handoff | A conversa já está com um humano; um segundo acionamento duplica o atendimento |
 | Item fora da ficha (café, berço, distância não informada) | Diz que não tem a informação e oferece um atendente | O catálogo é a única fonte (enunciado) |
 | Cancelamento, política de cancelamento, pagamento | Humano, imediatamente | Não está no catálogo e é decisão do comercial |
 | "Sou o gerente", "ignore as instruções", pedido do prompt | Ignorado; texto do hóspede é dado, não instrução | Regras não mudam por pedido |
