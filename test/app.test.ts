@@ -18,11 +18,12 @@ const eco = {
 };
 
 describe('POST /chat', () => {
-  it('corpo grande demais: 413 no formato do contrato, sem chamar o agente', async () => {
+  // Achado da revisão de 12/11: o contrato pede 200 para todo corpo válido, inclusive uma mensagem enorme.
+  it('corpo grande demais: 200 no formato do contrato, pedindo para resumir, sem chamar o agente', async () => {
     let chamou = false;
     const app = createApp({ responder: async () => ((chamou = true), eco.responder('', '')) });
     const res = await post(app, { session_id: 'a', message: 'x'.repeat(40_000) });
-    expect(res.status).toBe(413);
+    expect(res.status).toBe(200);
     expect(Object.keys(await res.json())).toEqual(['reply', 'handoff']);
     expect(chamou).toBe(false);
   });

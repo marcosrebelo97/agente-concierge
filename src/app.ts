@@ -25,7 +25,8 @@ export function createApp(agent: Pick<Agent, 'responder'>) {
   app.get('/health', (c) => c.json({ ok: true }));
 
   const LONGA = 'Sua mensagem ficou longa demais. Pode resumir em poucas linhas?';
-  const corpoGrande = bodyLimit({ maxSize: 32 * 1024, onError: (c) => c.json({ reply: LONGA, handoff: false }, 413) });
+  // Acima de 32 kB o corpo nem é lido; a resposta segue o contrato (200) e pede uma mensagem menor.
+  const corpoGrande = bodyLimit({ maxSize: 32 * 1024, onError: (c) => c.json({ reply: LONGA, handoff: false }) });
 
   app.post('/chat', corpoGrande, async (c) => {
     const prazo = Date.now() + PRAZO_MS;
