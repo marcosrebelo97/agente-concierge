@@ -83,5 +83,6 @@ segundos; um lead errado ou um valor inventado chega ao comercial e ao hóspede.
   Uma lista de expressões é frágil por natureza: cada rodada de revisão encontrou formas novas de dizer "sim".
 - **Compactar o histórico** depois de N turnos, preservando os pares de ferramenta. Hoje, conversas acima do teto
   vão para um humano.
-- **Observabilidade:** custo, latência e motivos de handoff por dia num painel, com alerta de gasto.
+- **Observabilidade:** custo, latência e motivos de handoff por dia num painel, com alerta de gasto. Com
+  tráfego real, um subagente leria os handoffs e as falhas da produção e proporia casos de eval a partir deles.
 - **Teste de contrato com a API real** do catálogo e do webhook antes de cada deploy.

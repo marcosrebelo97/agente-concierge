@@ -141,11 +141,17 @@ Haiku 5.5 US$ 0,10, US$ 0,50 e US$ 0,01; escrita de cache a 1,25× a entrada.
 Feito com Claude Code. O que ficou no repositório:
 
 - [`CLAUDE.md`](CLAUDE.md): os invariantes que nenhuma mudança pode quebrar e o fluxo de trabalho.
-- [`.claude/agents/`](.claude/agents): dois subagentes da software factory.
+- [`.claude/agents/`](.claude/agents): quatro subagentes da software factory, cada um num ponto do ciclo.
   - `hospede-adversario` escreve casos de eval como um hóspede real ou mal-intencionado. É instruído a só
     editar `evals/casos-adversario.ts` e a tirar os valores de `evals/cotar.ts`.
   - `revisor-de-evals` lê as falhas, classifica (bug do agente, eval errado, lacuna de política) e propõe
     a correção mínima. Só tem ferramentas de leitura.
+  - `revisor-de-regras` revisa o diff contra os invariantes do `CLAUDE.md` e as decisões do `DECISOES.md`,
+    o que o `/code-review` não conhece: valor que não sai do código, lead sem confirmação ou duplicado,
+    handoff perdido, dado pessoal em log.
+  - `bateria-em-producao` conversa com o agente publicado depois de cada deploy, com o catálogo e o modelo
+    reais. Fala com a produção só por `evals/conversar.ts`, que recusa confirmação e telefone com a mesma
+    `confirmaReserva` do agente: nenhuma mensagem dela gera lead no webhook oficial.
 - [`.claude/settings.json`](.claude/settings.json): bloqueia a leitura de `.env`, `.env.local` e `.vercel/`.
 
 O que foi usado na sessão, sem ficar no repositório:
@@ -154,7 +160,8 @@ O que foi usado na sessão, sem ficar no repositório:
 - **Revisão:** `/code-review` antes de fechar cada etapa; no fim, quatro subagentes revisaram o projeto em
   paralelo (conformidade com o enunciado, segurança, robustez, entrega) e os achados confirmados viraram
   commits `fix:`. Antes da entrega, uma segunda rodada repetiu a revisão e simulou a bateria com 37 mensagens
-  contra a produção ([`docs/EVALS.md`](docs/EVALS.md)).
+  contra a produção ([`docs/EVALS.md`](docs/EVALS.md)). As duas revisões que se repetem a cada mudança
+  viraram o `revisor-de-regras` e a `bateria-em-producao`.
 - **Prompts:** o do agente está em [`src/agent/prompt.ts`](src/agent/prompt.ts); os dos subagentes, nos próprios
   arquivos em `.claude/agents/`.
 
@@ -173,7 +180,7 @@ src/
   infra/                       catálogo, sessões (Redis/memória), webhook
 api/                           entrada da função na Vercel
 test/                          unitários com modelo, catálogo e webhook falsos
-evals/                         casos, runner e cotar.ts
+evals/                         casos, runner, cotar.ts e conversar.ts (bateria em produção)
 docs/                          DECISOES.md, EVALS.md
 ```
 
