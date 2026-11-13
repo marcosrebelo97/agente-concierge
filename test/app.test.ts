@@ -17,6 +17,18 @@ const eco = {
   },
 };
 
+describe('GET /', () => {
+  it('descreve a API em vez de responder 404, sem chamar o agente', async () => {
+    let chamou = false;
+    const app = createApp({ responder: async () => ((chamou = true), eco.responder('', '')) });
+    const res = await app.request('/');
+    expect(res.status).toBe(200);
+    const corpo = await res.json();
+    expect(Object.keys(corpo.rotas)).toEqual(['POST /chat', 'GET /health']);
+    expect(chamou).toBe(false);
+  });
+});
+
 describe('POST /chat', () => {
   // Achado da revisão de 12/11: o contrato pede 200 para todo corpo válido, inclusive uma mensagem enorme.
   it('corpo grande demais: 200 no formato do contrato, pedindo para resumir, sem chamar o agente', async () => {

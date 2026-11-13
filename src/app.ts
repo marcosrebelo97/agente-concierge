@@ -22,6 +22,17 @@ const Entrada = z.object({
 export function createApp(agent: Pick<Agent, 'responder'>) {
   const app = new Hono();
 
+  // Quem abre a URL no navegador vê o que a API oferece, em vez de um 404.
+  app.get('/', (c) =>
+    c.json({
+      servico: 'agente-concierge',
+      descricao: 'Agente concierge de hospedagem: tira dúvidas pelo catálogo, cota e registra o pedido de reserva.',
+      rotas: {
+        'POST /chat': 'recebe JSON com session_id e message; responde com reply e handoff',
+        'GET /health': 'checagem de saúde',
+      },
+    }),
+  );
   app.get('/health', (c) => c.json({ ok: true }));
 
   const LONGA = 'Sua mensagem ficou longa demais. Pode resumir em poucas linhas?';
