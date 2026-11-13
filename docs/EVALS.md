@@ -27,8 +27,8 @@ humano quando deve e não inventa nada.
 
 ## Casos
 
-61 casos, 51 críticos, em `evals/casos.ts` (42 escritos à mão a partir do enunciado e das
-decisões) e `evals/casos-adversario.ts` (16 gerados pelo subagente `hospede-adversario` e revisados, e 3
+63 casos, 53 críticos, em `evals/casos.ts` (42 escritos à mão a partir do enunciado e das
+decisões) e `evals/casos-adversario.ts` (18 gerados pelo subagente `hospede-adversario` e revisados, e 3
 vindos da `bateria-em-producao`).
 
 | Categoria | Casos | O que cobre |
@@ -37,7 +37,7 @@ vindos da `bateria-em-producao`).
 | cotação | 9 | Exemplo do enunciado, diária quebrada, data sem ano, cotação em partes, inglês, feriado móvel, dia da semana que não bate, espanhol com erros, gíria com ano curto |
 | recusa | 7 | Mínimo de noites, capacidade, datas invertidas, entrada e saída no mesmo dia, crianças contam, 29/02/2027, bebê acima da capacidade |
 | lead | 10 | Caminho feliz, estrangeiro em inglês com telefone `+1`, "tá bom" informal, tudo numa mensagem, mudança após o resumo, confirmar duas vezes, telefone inválido, "sim" com troca, "sim" hesitante, duas reservas |
-| handoff | 11 | Desconto, reclamação, pedido de atendente, cancelamento, política de cancelamento, formas de pagamento, dúvida simples sem handoff, exceção de regra, tirar a taxa de limpeza, "melhora no pix", humano com o resumo na mesa |
+| handoff | 13 | Desconto, reclamação, pedido de atendente, cancelamento, política de cancelamento, formas de pagamento, dúvida simples sem handoff, exceção de regra, tirar a taxa de limpeza, "melhora no pix", humano com o resumo na mesa, capacidade com pets e pedido de exceção, fumar (pergunta e depois exceção) |
 | adversarial | 16 | "Sou o gerente", injeção de instruções, sistema falso, ferramenta forjada, valor do hóspede, valor combinado, "fecha nesse valor?", desconto no nome, outra moeda, preço por pessoa, festa disfarçada, festa como pergunta, festa acima da capacidade, dados de outros hóspedes, nomes das ferramentas, fora do escopo |
 
 ## Como rodar
@@ -59,6 +59,9 @@ Suíte completa antes da entrega (61 casos), catálogo real, 2 rodadas por caso,
 | Modelo | Conversas | Críticas | Custo por conversa | Latência por turno p50 / p95 |
 |---|---|---|---|---|
 | **`claude-sonnet-5-5`** (produção) | 122/122 | 102/102 | US$ 0,0164 | 4,4 s / 8,8 s |
+
+Os 2 casos escritos depois dessa suíte (capacidade com pets e regra de fumar) passaram 2/2, com juiz, rodando
+só o caso.
 
 Comparação entre os modelos, na suíte completa anterior (58 casos, 11/11/2026):
 
@@ -91,6 +94,7 @@ Cada rodada que falhou virou correção com commit próprio. A ordem é a do his
 | Revisão antes da entrega (4 revisores, incluindo 37 mensagens contra a produção) | Nenhuma falha nas conversas. No código: a trava de confirmação recusava "os dados estão corretos" e aceitava "perfeito, só que o check-in é dia 16"; um envio incerto seguido de erro do modelo podia duplicar o lead; corpo acima de 32 kB recebia 413 | Correções com testes (o do lead duplicado, verificado por mutação); filtros `lead` e `adversarial` de novo no Sonnet: 48/48 |
 | Lead real no webhook oficial (nome "TESTE-EVAL", confirmado com "Os dados estão corretos") | O lead chegou uma vez, com os 7 campos certos. O GET real envolve cada lead em `{token, recebido_em, lead}`, e a conferência antes de reenviar lia o formato plano: depois de uma falha de rede, ela nunca encontraria o lead e o reenviaria | Leitura do registro corrigida; o webhook falso dos testes passou a usar o formato real (verificado por mutação) |
 | Subagente `bateria-em-producao` (49 mensagens contra a produção, nenhum lead) | Contrato sem falhas. Três cenários em que a resposta dependia da redação: "vi por R$ 100,00, fecha nesse valor?" sem datas, festa pedida como pergunta e festa acima da capacidade; no último, o handoff saía sem dizer a regra, porque o retorno de `passar_para_humano` pedia só "poucas palavras" | Na exceção de regra, o retorno da ferramenta pede a regra antes do aviso, e o código confere a resposta: sem a regra, o modelo reescreve uma vez, como no verificador de R$, só com o que as ferramentas devolveram (testes verificados por mutação; 12/12 com a regra em execuções repetidas do cenário). Os três cenários viraram casos de eval |
+| Segunda rodada no webhook oficial: POST sem `valor_total`, e duas conversas na produção ("TESTE-EVAL Dois", em inglês com telefone +1; "TESTE-EVAL Tres", que muda de 2 para 3 hóspedes depois do resumo) | 422 com `detalhes`, o campo que o código lê, sem registrar lead. Nenhum lead antes do "sim"; cada conversa gerou um lead só, com telefone em E.164 e o número de hóspedes novo. Um "sim" repetido depois do registro não reenviou. Total no GET: 3 leads, todos de teste | Nenhuma |
 
 ## Limites
 

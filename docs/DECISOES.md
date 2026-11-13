@@ -15,7 +15,7 @@ segundos; um lead errado ou um valor inventado chega ao comercial e ao hóspede.
 | Modelo | Claude Sonnet 5.5, SDK oficial, loop próprio | Margem diante de conversas imprevistas; trocável por `MODELO` |
 | Sessões | Upstash Redis, na mesma região da função | Sessão e lock compartilhados entre instâncias serverless |
 | Hospedagem | Vercel (Docker como alternativa) | URL pública dentro dos 60 s; deploy a cada push na `main` |
-| Testes | Vitest e evals próprios | 290 testes sem rede; 61 casos com o modelo real |
+| Testes | Vitest e evals próprios | 295 testes sem rede; 63 casos com o modelo real |
 
 ### Arquitetura
 
@@ -97,3 +97,5 @@ segundos; um lead errado ou um valor inventado chega ao comercial e ao hóspede.
 - **Observabilidade:** custo, latência e motivos de handoff por dia num painel, com alerta de gasto. Com
   tráfego real, um subagente leria os handoffs e as falhas da produção e proporia casos de eval a partir deles.
 - **Teste de contrato com a API real** do catálogo e do webhook antes de cada deploy.
+- **Ambiente de homologação:** URL do webhook por variável de ambiente e um deploy de preview apontando para um
+  webhook de teste, para que a bateria em produção também confirme reservas e envie leads.
